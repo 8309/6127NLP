@@ -1,40 +1,46 @@
-# 原油证据问答系统当前进度
+# Oil Evidence current progress
 
-截至 2026 年 10 月 12 日，新增资料采集和统一清洗收尾完成。当前开发语料是暂存版本，默认知识库尚未切换。此仓库发布实现和进度，完整本地数据不随代码公开。
+As of 2026-10-12, source acquisition and uniform cleaning are closed out. The 11,815-passage staging corpus has a local index that passed integrity checks. The default knowledge base is unchanged; formal retrieval comparison and release remain pending. This repository publishes implementation and progress, not the complete local data.
 
-## 已验证的结果
+This is the English publication edition. Historical private receipts verify the preserved canonical bilingual implementation, not the newly translated public code or interface. Exact historical replay requires the matching original implementation and the excluded raw-data snapshot. The English edition does not rebuild or certify a new corpus.
 
-- 暂存库包含 11,815 个去重段落、1,562,715 词、28,582 个唯一词，覆盖 1,527 份贡献文档和 5,703 个清洗源页；比 10,000 段要求多 1,815 段，余量 18.15%。
-- 全部来源采用同一切分策略：160 词目标、65/240 词软边界、480 词上下文上限。评论与政府答复混列、参考文献及无法验证的尾页保守隔离，原件和失败案例保留在本地。
-- 本地最终完整测试为 1,171 通过、1 项因 Windows 符号链接权限跳过、0 失败。来源重建审计退出 0，四类主产物逐字节一致，19 个实现文件的哈希校验通过。这是已记录的本地结果，不是 GitHub Actions 运行结果。
-- 66 个固定机器核对案例及 2 个额外诊断保留原样。已知严重问题已隔离，34 项警告保留；不是全库人工审核或人工金标准。
-- 默认旧库仍为 10,079 段。原 4,500 条段落机器标签、100 条问答及 728 条机器复核保持原版本；新段落编号不继承标签。
+The publication checkout passed 1,415 fixture tests, with zero failures and three skips (two host symlink-permission limitations and one excluded-data sample test). A separate read-only check against the retained official PDF samples passed, as did a synthetic English workbench smoke. The public language check found no literal Han text. The initial non-hermetic test failure and its isolated fixture repair remain recorded in [the publication receipt](../reports/english_publication.json); this is not a new formal retrieval evaluation. See [publication edition boundaries](PUBLICATION_EDITION.md).
 
-机器可读结果及对应本地原始报告的摘要哈希见 [reports/progress.json](../reports/progress.json)。详细处理与失败记录见 [UNIFIED_CORPUS.md](UNIFIED_CORPUS.md)，完整任务清单见 [TASKS.md](../TASKS.md)。
+## Verified results
 
-## 尚未完成的任务
+- The staging corpus contains 11,815 de-duplicated passages, 1,562,715 words and 28,582 unique words from 1,527 contributing documents and 5,703 cleaned source pages. It exceeds the 10,000-passage requirement by 1,815 passages, or 18.15%.
+- All sources use one segmentation policy: a 160-word target, soft bounds of 65/240 words and a 480-word context cap. Mixed public comments/government responses, references and unverifiable tail pages are conservatively held out. Originals and failure cases remain local.
+- The historical local source-closeout full suite passed 1,171 tests, with one Windows symlink-permission skip and zero failures. Source-reconstruction audit exited 0; four principal artifacts reproduced byte for byte and the 19 implementation hashes matched. These are recorded local results, not GitHub Actions results.
+- The same 66 fixed machine source-review cases and two additional diagnostics are preserved. Known critical defects were excluded and 34 warnings remain. This is not corpus-wide human review or human ground truth.
+- The default library remains at 10,079 passages. The original 4,500 machine paragraph labels, 100 QA records and 728 machine reviews retain their original versions. New passage IDs do not inherit labels.
+- The new index contains an 11,815 x 384 float32 matrix produced by the cached local English BGE model. Source reconstruction before and after indexing and vector/corpus/ID-order/model hashes passed. Related tests passed 268 checks, and 24 real retrieval runs passed date, region and source-offset checks. These do not establish retrieval accuracy or release-gate acceptance.
+- Fifty new bilingual development questions are fixed: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They use 37 other source documents, with authoring anchors separate from unlabelled query inputs. Related tests passed 141 checks with one host-permission skip. Design categories are not answer labels; retrieval and independent annotation have not been run on these 50 questions. See [development question preparation](DEVELOPMENT_QUESTIONS.md).
 
-1. 为新版暂存库建立检索索引，准备 50 条开发问题。
-2. 用开发问题比较关键词、向量及混合检索，修正问题后通过来源和发布门槛，再接入工作台。
-3. 准备 200 条开发记录及 1,000 条按事件隔离的测试记录，独立机器标注并保留分歧和用量记录。
-4. 完成检索与回答评估、两项改进的消融实验、性能测量及报告与提交材料。
+[reports/progress.json](../reports/progress.json) contains aggregate results and hashes of the corresponding private local reports. See [UNIFIED_CORPUS.md](UNIFIED_CORPUS.md) for processing and failure records and [TASKS.md](../TASKS.md) for the full task list.
 
-此前较小统一版本的混合检索对照退步仍作为失败证据保留，不据此声称当前新版已通过。正式人工标注、独立人工一致性和单人完成的课程要求仍待课程方确认；机器一致性不代替人工验收。
+## Remaining tasks
 
-## 仓库包含和排除的材料
+1. Run the fixed 50 development questions through keyword, dense and hybrid retrieval and create a shared candidate evidence pool.
+2. Independently annotate relevance and answers, compare retrieval quality, address defects and pass source/release gates before connecting the new library to the workbench.
+3. Prepare 200 development and 1,000 event-isolated test records, independently machine-annotate them, and preserve disagreements and usage records.
+4. Complete retrieval/answer evaluation, ablations of both improvements, performance measurements, the report and submission materials.
 
-仓库包含 `src/`、`scripts/`、`tests/`、`seeds/`、`docs/`、本地工作台入口、锁定依赖以及公开进度摘要。配置中的服务地址和模型角色不包含 API 密钥。
+The earlier smaller uniform corpus's hybrid-support regression remains failure evidence; it does not establish whether the current candidate passes. Instructor confirmation is still needed for formal human annotation, independent-human agreement and solo completion requirements. Machine agreement is not human acceptance.
 
-`data/`、`models/`、`tmp/`、`.venv/`、环境变量文件、日志、数据库和私钥不上传。课程原始作业 PDF 也不上传；[ACCEPTANCE.md](ACCEPTANCE.md) 是已整理的需求清单。
+## Included and excluded materials
 
-新克隆可以通过 `uv sync --locked --group dev` 安装项目依赖，然后运行 `uv run --locked python -m pytest -q`。历史来源重建、已有知识库查询和标注重放需要对应的本地原始资料、缓存、账本与冻结快照。公开摘要提供状态和哈希，不提供这些数据，也不宣称从空数据目录能重放历史结果。
+The repository includes `src/`, `scripts/`, `tests/`, `seeds/`, `docs/`, the local workbench entry point, locked dependencies and an aggregate public progress summary. Service endpoints and model roles in configuration contain no API keys.
 
-## 更新公开进度摘要
+`data/`, `models/`, `tmp/`, `.venv/`, environment-variable files, logs, databases and private keys are excluded. The original coursework assignment PDF is also excluded; [ACCEPTANCE.md](ACCEPTANCE.md) contains the extracted requirements.
 
-在保留完整本地收尾产物的工作目录中运行：
+A fresh clone can install dependencies with `uv sync --locked --group dev` and run fixture-based tests with `uv run --locked python -m pytest -q`. Historical source reconstruction, queries against an existing knowledge base and annotation replay require the matching local originals, caches, ledgers and frozen snapshots. The public summary supplies status and hashes, not those data; it does not claim that an empty `data/` directory can reproduce historical results.
+
+## Exporting the public progress summary
+
+In the canonical working directory retaining the complete private closeout artifacts, run:
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 scripts/export_public_progress.py
 ```
 
-该命令只读取本地收尾记录，校验语料、报告、实现和测试 XML 的绑定后，更新 `reports/progress.json`。它不采集资料、不调用模型、不重建索引，也不导出原文或标注内容。
+The exporter reads local closeout and subsequent index receipts and validates bindings among the corpus, reports, implementation, JUnit XML, actual vectors and model files before updating `reports/progress.json`. Historical source audit and current index verification are separate. Without an index receipt it retains the older state; invalid receipts fail closed. It does not acquire sources, invoke models, rebuild an index or export text, questions, evidence or annotations. Updating the summary does not automatically commit or push to GitHub. The translated publication checkout is not a substitute for the canonical implementation required by those historical guards.

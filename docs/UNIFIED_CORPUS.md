@@ -1,102 +1,124 @@
-# 统一语料版本实施记录
+# Unified Corpus Implementation Record
 
-状态：本轮已下载新增资料收尾完成，停止扩充。统一暂存库为 **11,815 段、1,562,715 词，数量余量 18.15%**；完整测试 1,171 项通过、1 项主机权限跳过，最终逐字节重建审计真实通过。固定机器样本的已知严重问题已处置，轻度警告保留，不代表全库或人工批准。历史 `semantic-page-v1` 的失败检索对照保留；没有新索引或发布，默认仍为旧 10,079 段数据，正式评估集未冻结。8517 服务最后检查未监听，不声称网页当前可用，也未在这次只读检查中启动服务。
+The unified staging corpus has **11,815 passages and a local index, but has not been published**. The default corpus remains the earlier 10,079-passage version. The staged corpus contains 1,562,715 words, with an 18.15% passage-count margin. Index validation passed 268 tests and 24 real retrieval checks. The earlier source-closeout full suite passed 1,171 tests with 1 host-permission skip; its historical reports are preserved. Known serious issues in the fixed machine-reviewed samples have been addressed, while minor warnings remain. This is not whole-corpus approval or human approval. The failed historical `semantic-page-v1` retrieval comparison remains available. The formal evaluation set is not frozen, and this index run did not start or switch the workbench.
 
-## 当前新增资料收尾（不再扩充）
+This English publication copy is a separate presentation implementation. Its translated code and documentation do not have the historical CODE19 hashes. Exact replay of the private, hash-bound historical runs requires the preserved canonical implementation, source snapshots, cached model, and archives; the public English copy does not substitute for those inputs.
 
-新增采集：EIA 67 份原件（42 份派生资格通过，24 份初始排除、1 份因无年份修订公告另行保留隔离）；Treasury 203 份（61 份资格通过）；Dallas 28 份调查正文；BOEM 两份可追溯 PDF。资格通过和 PDF 页数均不等于有效段落数。CER/WB/StatCan 失败获取为零贡献，其余 BOEM 超限和网络失败不计入。
+## New Staged Index
 
-最初 HTML 重建为 10,459 段；固定极端长度/来源分层 44 条机器复核发现 12 个关键问题，原样保留在 `reports/html_source_review.json`。据原文修正独立受访者边界、孤立问题、统计对象/期间、项目合集及非商品 diesel/gasoline/公司名锚点；字数参数不变，全库统一重处理。旧 9,452 单独重建变为 9,387（196 旧 ID 退出或重绑定、131 新 ID、9,256 旧 ID 保留），不是为保数量冻结坏段；原始版本文件未改变。
+Following separate authorization to build the index, the cached local English model `BAAI/bge-small-en-v1.5` generated **11,815 x 384 float32 vectors** offline. Full-text hashes allowed reuse of 373 cached vectors; the other 11,442 passages were actually re-encoded. No old passage IDs or labels were inherited. The vectors are stored in `data/unified_runs/semantic-page-v2-buffer/stage/index/`. BM25 is built when the retriever loads and covers all 11,815 passages.
 
-收尾前阶段为 **10,879 段、1,400,728 词、25,593 唯一词、1,526 份贡献文档、5,254 个清洗源页**。两份 BOEM PDF 当时贡献 506 个程序接受段落；该阶段尚有 3 个关键样本问题，全文、失败记录和源码已冻结，语料 SHA `4881e7d689aaec415d4adc67146e61cf0852a15cc7ae8d8eeefbd2120f53b91d`，不是当前阶段。
+The entry point `scripts/build_staged_index.py` uses the existing unified workflow and its writer lock. It redirects the two audit reports to a separate index-run directory without changing source processing, segmentation, or retrieval algorithms. Before and after indexing, the four main artifact types were actually rebuilt from the original extraction caches and matched byte for byte. Corpus and vector hashes, model files, passage order, dimensions, finite values, and unit norms all passed. The default corpus, default index and embedding cache, original labels, both SQLite databases, seven staged input types, and historical source-closeout reports retained their original bytes. The old `stage/reports/unified_quality.json` records the historical pre-index conclusion `index_verified=false`; the current passing result is in a separate `indexed_audit.json`. Earlier checks were not rewritten.
 
-中间阶段曾为 **12,327 段、1,625,073 词、30,258 唯一词、1,527 份贡献文档、5,910 个清洗源页**，SHA `5005bed72bc7be6c12249d66bc413ea4f30c402af85451d10b7ad2dabcc26815`，源页 SHA `8f07ddb5dd0b6ea194c978fdc56cfaeb518275e3c14d5608ee0cf4209e9a6595`。三份 BOEM PDF 共贡献 1,958 段：两份先前报告为 273+232 段，已下载的 917 页报告为 1,453 段。早先文档的“1,456 段”是把该报告固定 11 个样本的 1,456 词误写成文档段数；原机器报告的实际总体 1,453 是正确的，原报告未修改。该中间版抽查发现评论/政府回应混列及文献题名冒充证据，不能作为最终数量或语义批准。
+The index receipt entry point is this run's `reports/index_build.json`, which points to the immutable `reports/index_builds/2026-10-12T09-17-08.344658+00-00-207ae991/result.json`. The corpus SHA remains `62dde606a50bda9c7404231498c5dc83f0cd4a36f1259540f2ae377f7ca767cd`. The vector SHA is `1ca739750f5149904244c7d00a73e69018d576c053d212ce9de9bf12e1a3831a`, and the index-manifest SHA is `920dadb72a7a16cb9a7b032a98467170bc8559cef7023fa2a94dce821a2d7dd2`.
 
-最终阶段为 **11,815 段、1,562,715 词、28,582 唯一词、1,527 份贡献文档、5,703 个清洗源页**。比一万多 1,815 段（18.15%），不新增请求、不降低切块参数，也不把父子同时计数。三份 BOEM PDF 最终共贡献 1,446 段，其中本地修复报告为 941 段。语料 SHA `62dde606a50bda9c7404231498c5dc83f0cd4a36f1259540f2ae377f7ca767cd`，源页 SHA `216a2ab26ae02605b1ad2373426406cf1415d735c29c4e46c13b1b00ea1c0507`。对比 5005 版，512 段/62,358 词退出、零新增；数量服从真实证据过滤，不保原先 12,000 目标。
+Real retrieval checks passed 24/24. Three existing representative questions used historical and latest cutoff dates, with additional cases for a cutoff before the corpus window and for region filtering. Each case ran BM25, dense, and hybrid retrieval. Source IDs, ranks, exact source-text offsets, and availability dates were checked for every result; the receipt entry point is `reports/index_smoke.json`. The six related test files actually exited with code 0: **268 passed, 0 failed, 0 skipped, in 87.96 seconds**. The final JUnit file is `reports/index_checks-final-junit.xml`; the earlier 256-test run is also preserved. Synthetic vectors in the tests exercise safeguards and do not replace checks using the real model.
 
-产物在 `data/unified_runs/semantic-page-v2-buffer/`：`stage/passages.jsonl`、`stage/source_pages.jsonl`、`stage/quarantine.jsonl`、`stage/source_exclusions.jsonl`、`stage/reports/corpus.json`、`stage/reports/unified_quality.json`。旧标签、问答、审核记录、默认索引和两个 SQLite 仍匹配真实基准的 13 个哈希；新编号不继承标签。最终 full-suite **1,171 通过、1 项主机符号链接权限跳过、0 失败，222.64 秒**，保留 `reports/full_suite-final.json` 与 JUnit XML。19 个实现文件在测试与审计后哈希一致。最终审计真实退出 0、错误数组为空，四类主产物逐字节重建一致，元数据/偏移/词数/非空白字符/日期/来源与重处理证明校验通过；`index_verified=false`，未声称新版检索已验证。旧 5005/19b82 的测试、审计及失败 QA 都单独保留，不冒作最终结果。
+In a working directory containing the corresponding local source snapshots and cached model, run:
 
-前版 55 条固定机器原文复核（原 HTML 44 + 新 PDF 11，另保留 2 条额外 Summary 诊断）发现 3 个关键异常：一个调查答案只在元数据有目标年份、两处 PDF 跨页句子残片。已按真实连续问题/答案区间绑定 2022 语境（134 词），将 TX 和小写 as 续句分别隔离，仅移除实测 Summary 页脚；所有规则统一作用于全库。10,879 版和当时所有实现文件，包括旧依赖，均冻结于 `qa_inputs/4881e7d689aaec415d4adc67146e61cf0852a15cc7ae8d8eeefbd2120f53b91d/`。失败报告 `reports/buffer_source_review.json` 保留。原 55+2 在最终版的完整源页、文档/日期、原件、偏移以及整页接受/隔离处置均逐字一致；57 个机器判断明确复用，不声称本轮新做了 57 次语义审阅，31 项警告保留。最终绑定报告为 `reports/buffer_source_review-closeout-final.json`，冻结快照在 `reports/source_qa_final_closeout_inputs/62dde606a50b/`。
+```powershell
+.\.venv\Scripts\python.exe -X utf8 scripts/build_staged_index.py --run semantic-page-v2-buffer --offline
+.\.venv\Scripts\python.exe -X utf8 scripts/check_staged_index.py --run semantic-page-v2-buffer --offline
+.\.venv\Scripts\python.exe -X utf8 scripts/export_public_progress.py
+```
 
-新增报告的固定 11 项（SHA5、最短3、最长3并集）保持原样，不筛换容易样本：原 7 项严重、3 项警告、1 项通过。根据实际 PDF 布局统一整章/子节隔离：A References 第 392–459 页 68 页；L 评论与政府答复第 710–826 页 117 页；B/C/G/J/K/M 末尾参考子节真实 29 页。末页 917 是出版者 Mission 背封，不是 M-91 参考文献；规则因缺少连续章页码保守再隔离 1 页并标失败边界，未为 BOEM 添加特定背封例外。合计 215 物理页（不是有效段数），仅该原件有新增命中；下一章正文仍保留。参考子节首个混合页的部分正文一并隔离，尤其 575/907 页，明确披露损失，不用猜测列或复制语境补齐。
+These commands neither publish nor switch the default corpus. Completing the new index does not establish that the earlier hybrid-retrieval regression has been resolved. Context truncation by the English BGE model and Chinese-query quality were not evaluated in this run. A subsequent preparation step fixed 50 new development questions; see [Development Question Preparation](DEVELOPMENT_QUESTIONS.md). The next steps are to build a shared candidate pool from the three retrieval modes, label it independently, and compare retrieval before applying the release gates. This index run generated no answers or new labels and made no paid model API calls. Codex subscription usage remains unmeasured.
 
-第一次整章隔离产生 11,854 段 `19b82...`，结构测试与审计虽通过，参考题名在 p504 重现，另有两条因去重占位解除重新出现；该中间失败版本与报告保留。子节规则作用于所有 PDF，不按文档/段落 ID 或物理页常量硬删。最终对比该版净退出 39 段/4,378 词、零新增；原 7 项严重文本在所有接受段落中均不存在，p504 及新暴露的 p575/p910 书目也不存在。原 4 个保留样本的整个源页及完整段落/元数据/偏移字节一致，沿用原判断（3 警告/1 通过）；被隔离的 7 项不是重新标为“通过”。原报告 `reports/boem-goa-source-check.json`、边界证据和中间失败报告均保留；这是固定机器样本处置，不是全库错误率、人工标签或整体验收。
+## Source Closeout With Collection Stopped
 
-最后一个已启动批次保存的 3 份原件已处理：公开 917 页报告在项目环境启用 `pypdf[crypto]` 后读取成功；第二物理页出版者区明确月份，当前 PDF 版本的元数据日期晚于原发布日期，派生可用日期保守推后，不回填成早期可用。两个 ROD 因无可核验的出版封面月份保持隔离。`supplement/reprocessing_admissions.jsonl` 是追加式、机器版本校验，不是语义批准；原 556 个两份清单对象和原件不覆写，缓存仅新增，不覆盖。Proof 中 `cover_date_method` 仍是旧名称 `standalone_cover_text_layer`，本份实际依据原第二页 Published by 区的行内月份，判定用实际原文月份和当前文件时间，不把旧字段名当作另一次人审或视觉日期批准。
+New collection produced 67 EIA originals: 42 passed derived eligibility checks, 24 were initially excluded, and 1 was separately retained in quarantine because its revision notice lacked a year. Treasury contributed 203 originals, of which 61 passed eligibility checks. Dallas contributed 28 survey bodies, and BOEM initially contributed two traceable PDFs. Eligibility counts and PDF page counts are not valid passage counts. Failed CER/WB/StatCan retrieval contributed zero passages; oversized and network-failed BOEM items were also not counted.
 
-新发现的 79 个 Dallas research 链接未导入，GAO 没有下载或试采；所有新来源采集已停止。第一次 5005 重建审计曾异常中断，保留 `reports/audit-interruption-5005.json`、其已知本次 owner 的锁副本和部分重放目录；确认 owner 消失后只恢复该临时锁，随后重试真实成功。一个重复的原字符匹配诊断由 root 验证本次 PID/启动时间后终止；保留已复制的旧源和 19 个实现文件，`reports/redundant-mapper-interruption-19b82.json` 明确该诊断未完成，未移除语料锁或原始数据，最终 57 核验改用完整源/处置的线性比对。没有把中断当作通过。
+The initial HTML rebuild produced 10,459 passages. A fixed machine review of 44 samples stratified by extreme length and source found 12 critical issues, retained unchanged in `reports/html_source_review.json`. Source-based fixes addressed separate respondent boundaries, orphan questions, statistical subjects and periods, project compilations, and noncommodity diesel/gasoline/company-name anchors. Word-count parameters stayed unchanged, and the entire corpus was reprocessed uniformly. Rebuilding the earlier 9,452-passage version in isolation produced 9,387 passages: 196 old IDs exited or were rebound, 131 new IDs appeared, and 9,256 old IDs remained. Bad passages were not frozen to preserve a count; original version files stayed unchanged.
 
-只读账本仍为 113 次记录（112 completed、1 reserved）及 0 human reviews；本轮没有新增已跟踪的付费模型 API 调用，Codex 订阅用量未测，不能称零费用。最后网络诊断 Microsoft/Dallas Fed 返回 200、EIA 10 秒超时；公网基本可用，8517 连接被拒绝是本地服务问题，未据此启动或修改服务。模型并行任务的容量繁忙不当作网络已断，也不当作已完成；最终仅接收实际文件和核验结果。语义近重复、跨机器移植审计、新版检索对照/索引/发布以及正式人工标注与评估仍不在此次数据收尾完成范围内。
+The pre-closeout stage contained **10,879 passages, 1,400,728 words, 25,593 unique words, 1,526 contributing documents, and 5,254 cleaned source pages**. The two BOEM PDFs then contributed 506 programmatically accepted passages. Three critical sample issues remained at that stage. Its full text, failure records, and implementation were frozen under corpus SHA `4881e7d689aaec415d4adc67146e61cf0852a15cc7ae8d8eeefbd2120f53b91d`. It is not the current stage.
 
-以下为历史 v1 的实际实施与失败证据，不是上述新阶段的验证结果。
+An intermediate stage contained **12,327 passages, 1,625,073 words, 30,258 unique words, 1,527 contributing documents, and 5,910 cleaned source pages**. Its corpus SHA was `5005bed72bc7be6c12249d66bc413ea4f30c402af85451d10b7ad2dabcc26815`, and its source-page SHA was `8f07ddb5dd0b6ea194c978fdc56cfaeb518275e3c14d5608ee0cf4209e9a6595`. Three BOEM PDFs contributed 1,958 passages: the first two contributed 273+232, and the downloaded 917-page report contributed 1,453. An earlier document incorrectly described "1,456 passages" by confusing the 1,456 words in that report's fixed 11 samples with its document-level passage count. The original machine report correctly recorded 1,453 overall passages and was not changed. Sampling of this intermediate version found public comments mixed with government responses and bibliography titles presented as evidence. Its counts and semantic status were therefore not accepted as final.
 
-## 规则和产物
+The final source-closeout stage contains **11,815 passages, 1,562,715 words, 28,582 unique words, 1,527 contributing documents, and 5,703 cleaned source pages**. This is 1,815 passages above 10,000, an 18.15% margin. No new requests were made, chunking parameters were not reduced, and parents and children were not counted together. The three BOEM PDFs ultimately contribute 1,446 passages, including 941 from the locally repaired report. The corpus SHA is `62dde606a50bda9c7404231498c5dc83f0cd4a36f1259540f2ae377f7ca767cd`, and the source-page SHA is `216a2ab26ae02605b1ad2373426406cf1415d735c29c4e46c13b1b00ea1c0507`. Compared with version 5005, 512 passages and 62,358 words were removed, with zero additions. Genuine evidence filtering took precedence over the earlier 12,000-passage target.
 
-- 从有哈希校验的原始 PDF/HTML 提取缓存重建，不从旧段落继续分割。HTML 正文和 PDF 布局的提取方式可以不同，但所有纳入正文应用同一个 `semantic-page-v1` 句子策略。
-- 160 词为目标、65/240 词为软边界、480 词为上下文安全上界；不按字数硬切完整句，不重叠。短的完整事实可以保留并记录例外，不能为了保住段数降低参数。
-- 保留原始段落、句子、单位和明确时间限定；指代、比较句和统计期需要对应上下文。图表、公式、字典和版式不确定的内容隔离，原件不删除，不猜数值或修复词。
-- 新段落都有清洗源页编号、精确字符偏移和同一策略字段。清洗移除的行、隔离文本和排除页面分别可审计。词数及非空白字符按保留/隔离全量核算。
-- 旧 4,500 条段落机器标签、100 条问答及 728 条复核保持原文版本和哈希；新编号不自动继承标签。机器抽查和来源事实探针不属于人工金标准。
+Artifacts are in `data/unified_runs/semantic-page-v2-buffer/`: `stage/passages.jsonl`, `stage/source_pages.jsonl`, `stage/quarantine.jsonl`, `stage/source_exclusions.jsonl`, `stage/reports/corpus.json`, and `stage/reports/unified_quality.json`. Original labels, questions and answers, review history, the default index, and both SQLite databases still match the 13 hashes in the actual protection baseline. New IDs do not inherit labels. The source-closeout full suite passed **1,171 tests with 1 host symlink-permission skip and 0 failures in 222.64 seconds**; `reports/full_suite-final.json` and the JUnit XML are preserved. The 19 implementation files retained matching hashes after testing and auditing. The final source-closeout audit actually exited with code 0 and an empty error array. The four main artifact types rebuilt byte for byte; metadata, offsets, word counts, nonwhitespace characters, dates, sources, and reprocessing proofs passed. That pre-index audit recorded `index_verified=false` and did not claim new-version retrieval validation. Tests, audits, and failed QA for versions 5005 and 19b82 remain separate rather than being presented as final results.
 
-实现入口：`src/oil_evidence/segmentation.py`、`unified_corpus.py`、`scripts/unify_corpus.py`。工作台版本/原页显示已兼容；当前默认 `oil build --run ...` 只暂存，不直接覆盖线上库。
+The preceding fixed source review covered 55 machine samples: the original 44 HTML samples plus 11 new PDF samples, with 2 additional Summary diagnostics retained. It found 3 critical anomalies: a survey answer carried its target year only in metadata, and two PDF excerpts began with cross-page sentence fragments. The actual continuous question-and-answer range supplied the 2022 context for the first case, retaining 134 words. The TX continuation and lowercase-as continuation were quarantined, and only the observed Summary footer was removed. All rules were applied uniformly to the corpus. Version 10,879 and all implementation files then in use, including the old dependency state, were frozen in `qa_inputs/4881e7d689aaec415d4adc67146e61cf0852a15cc7ae8d8eeefbd2120f53b91d/`. The failed `reports/buffer_source_review.json` remains. For the original 55+2 cases, the final version's complete source pages, document/date metadata, originals, offsets, and whole-page accepted/quarantined dispositions match exactly. The 57 machine judgments were explicitly reused, not described as 57 new semantic reviews; 31 warnings remain. The final bound report is `reports/buffer_source_review-closeout-final.json`, with its frozen snapshot in `reports/source_qa_final_closeout_inputs/62dde606a50b/`.
 
-## 历史 v1 真实记录
+The new report's fixed 11 samples were kept unchanged: the union of 5 selected by SHA, the 3 shortest, and the 3 longest. Easier samples were not substituted. Original judgments were 7 serious issues, 3 warnings, and 1 pass. Actual PDF layout informed uniform chapter/subsection quarantine: A References on physical pages 392-459, 68 pages; L public comments and government responses on pages 710-826, 117 pages; and 29 actual reference-subsection pages at the ends of B/C/G/J/K/M. Physical page 917 is the publisher's Mission back cover, not M-91 references. Because it lacks continuous chapter-page numbering, the generic rule conservatively quarantined that additional page and recorded a failed boundary check; no BOEM-specific back-cover exception was added. These are 215 physical pages in total, not valid passage counts. Only this original document received new matches, while the next chapter's body remained. Some body text on mixed first pages of reference subsections was quarantined as well, especially on pages 575/907. That loss is disclosed; guessed column order or copied context was not used to fill it.
 
-| 阶段 | 可检查结果 |
+The first whole-chapter quarantine produced 11,854 passages in version `19b82...`. Although structural tests and auditing passed, reference titles reappeared on p504, and two other excerpts reappeared after removal of prior deduplication blockers. This failed intermediate version and its reports remain. The subsection rule applies to every PDF, rather than hard-deleting by document ID, passage ID, or physical-page constant. The final version removes a net 39 passages and 4,378 words relative to that version, with zero additions. None of the original 7 serious excerpts occurs in any accepted passage; the p504 bibliography and newly exposed p575/p910 bibliographies are also absent. For the original 4 retained samples, whole source pages and complete passages, metadata, and offsets are byte-identical, so the original judgments are reused: 3 warnings and 1 pass. The 7 quarantined cases were not relabeled as passes. The original `reports/boem-goa-source-check.json`, boundary evidence, and intermediate failure reports remain. This is disposition of fixed machine samples, not a whole-corpus error rate, human labeling, or overall acceptance.
+
+Three originals saved by the last already-started collection batch were processed. The public 917-page report became readable after enabling `pypdf[crypto]` in the project environment. The publisher area on the second physical page explicitly gives the month. The current PDF version's metadata date is later than its original publication date, so derived availability was conservatively moved later instead of backfilled to the early date. Two RODs remain quarantined because a publication-cover month could not be verified. `supplement/reprocessing_admissions.jsonl` provides append-only, machine-version validation, not semantic approval. The original 556 objects in each of the two manifests and the originals were not overwritten; the cache only gained new entries. The proof retains the legacy `cover_date_method` value `standalone_cover_text_layer`, but this document actually uses the inline month in the second-page Published by area. The decision relies on the source month and current-file time, not on treating the old field name as another human review or visual-date approval.
+
+The 79 newly discovered Dallas research links were not imported, and no GAO material was downloaded or sampled. All new-source acquisition stopped. The first rebuild audit of version 5005 was interrupted abnormally; `reports/audit-interruption-5005.json`, the lock copy belonging to this run's known owner, and the partial replay directory remain. After confirming the owner no longer existed, only that temporary lock was recovered; the subsequent retry actually succeeded. The root agent terminated one redundant original-character-matching diagnostic after validating its PID and start time. The copied older source and 19 implementation files remain, and `reports/redundant-mapper-interruption-19b82.json` explicitly marks that diagnostic as incomplete. No corpus lock or original data was removed. The final 57-case verification instead used a linear comparison of complete sources and dispositions. An interruption was not counted as a pass.
+
+The read-only ledger still contains 113 records: 112 completed and 1 reserved, with 0 human reviews. This source-closeout run added no tracked paid model API calls. Codex subscription usage was not measured, so zero cost cannot be claimed. The final network diagnosis returned 200 for Microsoft and Dallas Fed, while EIA timed out after 10 seconds. Basic public connectivity was available; refusal at port 8517 was a local-service issue. That diagnosis did not start or change the service. Capacity-busy model subtasks were neither treated as a disconnected network nor marked complete; only actual files and verified results were accepted. Semantic near-duplicate resolution, cross-machine portability auditing, new-version retrieval comparison/indexing/publication, and formal human labeling and evaluation were outside the scope of that source-closeout stage. Subsequent indexing is recorded separately above.
+
+The following sections preserve actual historical v1 implementation and failure evidence. They are not validation results for the newer stage.
+
+## Rules and Artifacts
+
+- Rebuild from hash-checked original PDF/HTML extraction caches, rather than splitting old passages again. HTML body extraction and PDF layout handling may differ, but every included body uses the same `semantic-page-v1` sentence policy.
+- Use a 160-word target, 65/240-word soft bounds, and a 480-word context safety ceiling. Do not split complete sentences at a hard word count or overlap chunks. Short, complete facts may be retained with recorded exceptions; parameters must not be lowered to preserve passage counts.
+- Preserve original paragraphs, sentences, units, and explicit time qualifiers. Pronouns, comparisons, and statistical periods need their corresponding context. Quarantine uncertain charts, formulas, dictionaries, and layouts; retain originals without guessing values or repairing words.
+- Every new passage has a cleaned source-page ID, exact character offsets, and a common policy field. Removed lines, quarantined text, and excluded pages are separately auditable. Word and nonwhitespace-character accounting covers all retained and quarantined content.
+- Preserve the original versions and hashes of 4,500 machine passage labels, 100 question-and-answer records, and 728 reviews. New IDs do not automatically inherit labels. Machine spot checks and source-fact probes are not a human gold standard.
+
+Implementation entry points are `src/oil_evidence/segmentation.py`, `unified_corpus.py`, and `scripts/unify_corpus.py`. The workbench supports corpus versions and source-page display. The default `oil build --run ...` behavior stages data rather than directly overwriting the live corpus.
+
+## Historical v1 Execution Record
+
+| Stage | Verifiable result |
 |---|---|
-| 首次统一候选 | 8,738 段；固定机器抽查 58 段，21 段关键异常；失败文本及偏移未替换，已归档 |
-| 新官方资料 | Treasury 171 份原件，其中 126 份通过日期/原油正文检查；DOE SPR 82 份，其中 80 份额外通过正文标题一致检查；47 份排除但保留原件 |
-| 第二次候选 | 9,438 段；92 段机器复查发现 11 条关键异常，原报告与失败文本已归档 |
-| 第三次候选（历史） | 9,460 段；97 段机器复查（29 段新读、68 段整源页一致复用）仍发现 3 条关键异常；实现、正文、复查与对照已归档 |
-| 最终本轮候选 | 9,452 段、1,261,632 词、22,834 唯一词、1,408 份贡献文档、4,727 个清洗源页；比 10,000 段少 548，数量要求未达标 |
-| 最终固定原文复查 | 100 段：6 段新增全文读取、94 段核对整源页对象/偏移/日期完全一致后复用旧判断（其中 6 段额外重读）；63 段固定必查全覆盖，35 个历史失败均有处置回执；固定样本中重大异常 0，23 条较小警告保留 |
-| 最终规则测试 | 749 通过、1 Windows 符号链接权限跳过、0 失败；15 个实现文件与受保护线上文件的哈希在测试前后未变 |
-| 比较输入 | 30 个原问题 + 12 个新固定来源事实问题；在检索结果可见之前冻结，问题和引用不能按排名筛换 |
-| 首次真实对照 | 两版本 × 42 问题 × 3 模式，252 次检索；返回证据的元数据截止日违规为 0，输入哈希结束后复核未变 |
-| 原文问题处置 | PDF 原页检查后隔离正文/脚注串接页面；缺少当前统计期的 jet-fuel deliveries 和 lower-than 比较句隔离，而不是猜补日期；最后三处异常已不在候选中 |
-| 最终结构/索引审计 | 从原始提取缓存再次重建，四类产物逐字节相同，来源/偏移/词数/隔离/日期/旧标签全部检查通过；9,452 × 384 索引校验通过 |
-| 最终检索对照 | 沿用原来的 30+12 问题，保存全部 252 次结果，截止日元数据违规 0；关键词支持 4/12→6/12，向量与混合均 9/12→8/12 |
-| 实际发布门禁 | root 只读调用 `check_release_gates` 后实际返回 `Candidate source-anchor support regressed: 0.6666666666666666 < 0.75`；没有尝试发布 |
+| First unified candidate | 8,738 passages; 58 fixed machine samples, with 21 critical anomalies; failed text and offsets were archived without substitution |
+| New official sources | 171 Treasury originals, of which 126 passed date/crude-body checks; 82 DOE SPR originals, of which 80 also passed body-title consistency checks; 47 excluded originals retained |
+| Second candidate | 9,438 passages; review of 92 machine samples found 11 critical anomalies; original reports and failed text archived |
+| Third candidate, historical | 9,460 passages; 97 machine samples, comprising 29 newly read and 68 reused after whole-source-page equality, still found 3 critical anomalies; implementation, text, review, and comparison archived |
+| Final v1 candidate | 9,452 passages, 1,261,632 words, 22,834 unique words, 1,408 contributing documents, and 4,727 cleaned source pages; 548 below 10,000, so the size requirement was unmet |
+| Final fixed source review | 100 passages: 6 newly read in full and 94 judgments reused after exact whole-page object/offset/date checks, including 6 additional rereads; all 63 mandatory fixed samples covered and disposition receipts retained for all 35 historical failures; 0 major anomalies in the fixed sample, with 23 minor warnings retained |
+| Final rule tests | 749 passed, 1 Windows symlink-permission skip, 0 failures; hashes of 15 implementation files and protected live files unchanged before and after testing |
+| Comparison inputs | 30 original questions plus 12 new fixed source-fact questions, frozen before retrieval results were visible; questions and quotations could not be substituted based on ranks |
+| First real comparison | Two versions x 42 questions x 3 modes, 252 retrieval runs; 0 metadata cutoff violations in returned evidence; input hashes rechecked unchanged at completion |
+| Source-issue disposition | Quarantined pages mixing body and footnote text after original PDF-page inspection; quarantined jet-fuel deliveries and lower-than comparisons lacking a current statistical period instead of guessing dates; the final three anomalies no longer occur in the candidate |
+| Final structure and index audit | Rebuilt from original extraction caches; four artifact types matched byte for byte; sources, offsets, counts, quarantine, dates, and old labels passed; 9,452 x 384 index validated |
+| Final retrieval comparison | Reused the same 30+12 questions and retained all 252 results; 0 metadata cutoff violations; keyword support 4/12 to 6/12, dense and hybrid support both 9/12 to 8/12 |
+| Actual release gate | The root agent's read-only `check_release_gates` call returned `Candidate source-anchor support regressed: 0.6666666666666666 < 0.75`; publication was not attempted |
 
-EU Council 只发现 6 个真实链接，标准采集器读取 robots 时 403，正文采集 0，未绕过、未计入语料。公开可访问不等于可以整库再分发，原件打包仍需权利核验。
+EU Council discovery found only 6 actual links. The standard collector received 403 when reading robots, collected 0 bodies, and neither bypassed the restriction nor counted them in the corpus. Public accessibility does not establish permission to redistribute a full corpus; packaging originals still requires a rights review.
 
-本轮外部模型 API 调用与新人工标签为 0；本地向量模型及 Codex 订阅额度分开，订阅消耗未计量。没有把来源资格通过数或候选链接数当作有效段数。
+This historical v1 round made 0 external model API calls and added 0 human labels. Local vector-model use and Codex subscription credits are separate, and subscription usage was not measured. Source-eligibility counts and candidate-link counts were not reported as valid passages.
 
-第三次候选的三模式固定原句支持（历史失败对照；top-5，可按源页顺序组装已检索段）：
+The third candidate's fixed source-quotation support by mode was a historical failed comparison, using top-5 results and allowing retrieved passages to be assembled in source-page order:
 
-| 模式 | 旧库 | 9,460 候选 |
+| Mode | Old corpus | 9,460 candidate |
 |---|---:|---:|
 | BM25 | 4/12 | 6/12 |
-| 向量 | 9/12 | 8/12 |
-| 混合 | 9/12 | 8/12 |
+| Dense | 9/12 | 8/12 |
+| Hybrid | 9/12 | 8/12 |
 
-该次比较只使用两版本共有且元数据相同的 2,912 个源页，旧/新对应 8,920/7,900 段；新增来源不参与此切块对照。交集外 OFAC 探针也保留并计失败，不能只报告成功题。两处混合检索回归的完整原句在双方库内均仍可用且日期合规，只是新版 top-5 未返回对应页；不能把它们归因于丢句，也没有验证具体的排序变化机制。这是小样本机器逐字诊断，不是人工准确率、全面召回率或整体质量显著下降的统计结论。历史 9,460 版未发布。
+That comparison used only the 2,912 source pages shared by both versions with identical metadata, corresponding to 8,920 old and 7,900 new passages. New sources were excluded from this segmentation comparison. An OFAC probe outside the intersection was retained and counted as a failure; only successful questions were not selected for reporting. Complete source quotations for the two hybrid regressions remained available and date-compliant in both corpora, but the new top-5 results did not return the corresponding pages. The regressions cannot be attributed to lost sentences, and the specific ranking mechanism was not established. This is a small-sample, machine exact-text diagnosis, not human accuracy, comprehensive recall, or a statistical finding of a significant overall quality decline. Historical version 9,460 was not published.
 
-最终 9,452 版的三模式支持结果相同，共同来源页为 2,908 个，旧/新对应 8,912/7,890 个可比较段。来源、两版语料和索引、问题、模型文件及实现的结束哈希均实际复核未变；原文复查在排名开始前冻结。没有换题、删除失败问题、调整检索参数或追着探针修改规则。
+The final 9,452 version had the same support results. It shared 2,908 source pages with the old version, corresponding to 8,912 old and 7,890 new comparable passages. At completion, actual hash checks confirmed unchanged sources, both corpora and indexes, questions, model files, and implementation. Source review was frozen before ranking started. Questions were not changed, failures were not removed, retrieval parameters were not tuned, and rules were not revised to chase the probes.
 
-因此本轮完成的是统一流程、候选库及可复查诊断，不是新版发布或一万段验收。后续先在另行划分的开发问题上验证一般性的排序改进，不能针对这 12 个探针硬调；同时数量缺口需要新增可用来源信息，不靠把现有段落拆碎。任何进一步版本都需要重新经过相同检查。
+That v1 round therefore delivered a unified workflow, candidate corpus, and inspectable diagnosis, not a release or acceptance of the 10,000-passage requirement. Further work must validate general ranking improvements on separately partitioned development questions, rather than tune to the 12 probes. At that historical stage, the count shortfall also required new usable source information instead of fragmenting existing passages. Every subsequent version must undergo the same checks.
 
-旧工作台仍为 10,079 段，健康检查 HTTP 200 `ok`。四标签页及查询原断言通过的是禁用日志/检查报告写入的只读运行；不是新版界面实测。旧语料、索引、标注存档与账本哈希保持不变。
+At that historical check, the old workbench still used 10,079 passages and its health endpoint returned HTTP 200 `ok`. The four-tab and query assertions passed in a read-only run with logging and report writes disabled; this was not a real test of a new-version interface. Old corpus, index, annotation-archive, and ledger hashes remained unchanged.
 
-## 检查与发布
+## Checks and Publication
 
-未发布的运行位于 `data/unified_runs/semantic-page-v1/`：
+The unpublished historical run is in `data/unified_runs/semantic-page-v1/`:
 
-- `baseline/`：旧线上输入、索引、标签和处理代码；
-- `supplement/`：单独追加的来源清单及断点采集记录；
-- `qa_inputs/<sha>/`：被后续候选替换前的固定失败版本；
-- `stage/`：当前候选正文、源页、隔离记录、合并来源、索引和检查；
-- `reports/prior_failure_locations.json` 和 `source_probes.json`：原失败定位与不可按排名修改的事实探针。
-- `reports/source_probes-f0b254eb3b8d.json` 和 `source_probes-cabd757df2e0.json`：只重绑定源页哈希的副本，12 条题目、引用、参考要点和日期与原版完全一致；
-- `reports/code-snapshots/f0b254.../` 和 `code-snapshots/cabd757.../`：第三次和最终候选各 15 个已核对哈希的实现文件；
-- `qa_inputs/f0b254.../reports/comparison.json`：第三次候选的真实失败对照；
-- `stage/reports/semantic_review.json`：最终机器原文复查，SHA-256 `2d4919b49b97953e07802c67f5ac5c8fd41e8d7ed9ceaecfe70168d610d67e74`；只说明固定抽查范围，不是全库专家认可；
-- `stage/reports/comparison-v4.json`：本轮最终独立对照，SHA-256 `934ecb26de0d6a77fdc594373fd0fac1825108ec71ef21bd397fe2fe19920550`；旧对照归档验证后，复制同一最终报告为发布入口的 `comparison.json`，二者哈希一致；
-- `stage/reports/release_hold.json`：实际门禁失败、数量缺口、测试和未发布状态的汇总；不是通过的 `release_decision.json`。
+- `baseline/`: old live inputs, index, labels, and processing code.
+- `supplement/`: separately appended source manifests and resumable acquisition records.
+- `qa_inputs/<sha>/`: fixed failed versions saved before subsequent candidates replaced them.
+- `stage/`: candidate text, source pages, quarantine records, merged sources, index, and checks.
+- `reports/prior_failure_locations.json` and `source_probes.json`: original failure locations and fact probes that cannot be changed based on ranks.
+- `reports/source_probes-f0b254eb3b8d.json` and `source_probes-cabd757df2e0.json`: copies with only source-page hashes rebound; the 12 questions, quotations, reference points, and dates are identical to the original.
+- `reports/code-snapshots/f0b254.../` and `code-snapshots/cabd757.../`: 15 hash-checked implementation files for the third and final candidates respectively.
+- `qa_inputs/f0b254.../reports/comparison.json`: the third candidate's actual failed comparison.
+- `stage/reports/semantic_review.json`: final machine source review, SHA-256 `2d4919b49b97953e07802c67f5ac5c8fd41e8d7ed9ceaecfe70168d610d67e74`; it covers only the fixed sample, not whole-corpus expert approval.
+- `stage/reports/comparison-v4.json`: final independent comparison for that round, SHA-256 `934ecb26de0d6a77fdc594373fd0fac1825108ec71ef21bd397fe2fe19920550`; after verifying the archived prior comparison, the same final report was copied to release entry point `comparison.json`, with identical hashes.
+- `stage/reports/release_hold.json`: actual failed gate, count shortfall, tests, and unpublished status; it is not a passing `release_decision.json`.
 
-最终候选正文 SHA-256：`cabd757df2e07fa66fdc4a685e173a865af95600aa808c1dea23fba1c563e300`；清洗源页 SHA-256：`d14f2d8fdb8c53bc4464bba29e6441a645959459d1b1978578b1460d8d3d159b`。新 9,452 段均未自动继承旧标签。
+The final historical candidate-text SHA-256 is `cabd757df2e07fa66fdc4a685e173a865af95600aa808c1dea23fba1c563e300`; the cleaned source-page SHA-256 is `d14f2d8fdb8c53bc4464bba29e6441a645959459d1b1978578b1460d8d3d159b`. None of its 9,452 new passages automatically inherited old labels.
 
-历史运行顺序（不要并发写同一个运行）：
+The historical execution order was as follows. Do not write to the same run concurrently.
 
 ```powershell
 .\.venv\Scripts\python.exe -X utf8 scripts/unify_corpus.py snapshot
@@ -105,12 +127,12 @@ EU Council 只发现 6 个真实链接，标准采集器读取 robots 时 403，
 .\.venv\Scripts\python.exe -X utf8 scripts/unify_corpus.py audit --require-index
 ```
 
-审计会从原件/缓存重新运行算法，逐字节核对四类语料产物，并检查所有来源、日期、偏移、隔离、索引、旧标签及实现哈希。语义审查必须覆盖固定来源样本和长度极端，保留原失败案例。
+The audit reruns the algorithm from originals/caches, checks the four corpus artifact types byte for byte, and validates every source, date, offset, quarantine record, index, old label, and implementation hash. Semantic review must cover fixed source samples and extreme lengths while preserving the original failures.
 
-比较固定同一模型、参数、查询截止日和双方共有文档/页，对 BM25、向量及混合检索分别计算逐字来源引用支持和上下文覆盖；它不是答案正确率、人工召回率或正式 RAG 消融。关键异常未解决、时间泄漏或混合引用覆盖下降时禁止发布。
+Comparisons fix the model, parameters, query cutoff dates, and documents/pages shared by both versions. BM25, dense, and hybrid retrieval are separately assessed for exact source-quotation support and context coverage. This is not answer accuracy, human recall, or a formal RAG ablation. Publication is prohibited while critical anomalies remain, temporal leakage exists, or hybrid citation coverage declines.
 
-通过后才能 `publish`。数量一万不是工程发布门禁，质量优先；但不足一万时课程数量验收仍未完成，不能用旧库数量代替。发布时间冻结候选、输入/处理实现/比较文件和来源，保留可恢复旧文件及交易日志；异常回滚经过临时测试，不宣称断电时全局原子。发布后 `scripts/reproduce_unified.py` 可从本地原件/缓存重建并核对字节，不下载网页、不改线上语料；41 项重放相关临时测试通过，但真实新版发布及发布后重放尚未执行。
+Only after passing the gates may a run use `publish`. Ten thousand passages is not an engineering release gate because quality takes priority; however, below 10,000 passages the course's size acceptance remains incomplete, and the old corpus count cannot substitute for it. Publication freezes the candidate, inputs, processing implementation, comparisons, and sources, while retaining recoverable old files and a transaction log. Exception rollback passed temporary tests; the workflow does not claim global atomicity under power loss. After publication, `scripts/reproduce_unified.py` can rebuild from local originals/caches and verify bytes without downloading pages or changing the live corpus. Its 41 replay-related temporary tests passed, but a real new-version publication and post-publication replay had not been performed at this historical stage.
 
-项目没有 Git 元数据，CodeRabbit 的前置检查返回 `fatal: not a git repository`，没有执行该工具的评审。上述自动测试和机器原文核查不应称为 CodeRabbit 评审。
+At the historical v1 review, the project had no Git metadata. CodeRabbit's prerequisite check returned `fatal: not a git repository`, and no CodeRabbit review ran. The automated tests and machine source checks above must not be called a CodeRabbit review.
 
-正式 200 开发/1,000 测试题、独立标注协议和课程要求仍另行验收。即使当前候选通过抽样与检索检查，也不代表全库专家语义认可或作业整体完成。
+The formal 200 development/1,000 test questions, independent labeling protocol, and course requirements remain separate acceptance items. Passing samples and retrieval checks does not establish whole-corpus expert semantic approval or completion of the assignment.

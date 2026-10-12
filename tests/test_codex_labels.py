@@ -24,7 +24,7 @@ def publisher(tmp_path):
     write_jsonl(module.PACK, [row])
     decision = dict(dataset="pilot", number=1, grades=[2], result="passed", answerability="sufficient",
                     event_status="uncertain", points=["Production is forecast to rise."],
-                    quotes=[dict(e=1, text="Production is forecast to rise.")], note="预测，不是观测结果")
+                    quotes=[dict(e=1, text="Production is forecast to rise.")], note="Forecast, not an observed outcome")
     write_json(module.DECISIONS / "one.json", [decision])
     return module, decision
 

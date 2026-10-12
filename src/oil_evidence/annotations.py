@@ -67,7 +67,7 @@ def prepare_pilot(limit=50):
             if len(rows) >= limit:
                 break
             rows.append(dict(record_id=f"pilot-{len(rows) + 1:03d}", event_group="document-" + p["document_id"],
-                             question=question, question_zh="原文阅读审核题，需人工改写为独立研究问题后才能进入正式测试集。",
+                             question=question, question_zh="Source-reading review template: rewrite as a standalone research question before formal test-set admission.",
                              question_type="source_reading_template", as_of=p["available_by"], evidence_ids=[p["passage_id"]],
                              evidence=[p], answer_points=[], quotes=[], qrels={}, answerability=None,
                              event_status="unlabelled", provenance="unlabelled_pilot", status="pending_human",

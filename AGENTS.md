@@ -9,3 +9,10 @@
 - No paid model calls without configured service, user-provided budget and positive rate estimates. No secrets in files or logs.
 - Model agreement is not human agreement. Keep model-only, reviewed, and independent-human provenance. Formal acceptance does not follow from a smoke test.
 - Preserve raw documents and audit trails; do not overwrite a frozen evaluation version or existing pilot queue.
+
+## English publication policy
+
+- Keep public documentation, UI source text, comments, examples and commit messages in English. Preserve archive-compatible schema keys; do not encode untranslated prose to hide it from a language scan.
+- Imported sources, historical bilingual labels and frozen evaluation inputs belong in ignored local data, not the public Git tree.
+- Run `scripts/check_public_language.py` and the relevant tests before publication. Historical private receipts bind their original implementation, not a later language-translated edition.
+- Never rewrite previous commit history or rebind frozen experiment hashes merely to satisfy the public language policy.

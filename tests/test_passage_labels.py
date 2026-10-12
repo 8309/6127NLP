@@ -28,7 +28,7 @@ def label():
                 event_status="forecast", events=[],
                 quantities=[dict(value_text="10", unit_text="million barrels per day", reference_period="2026",
                                  measure="crude_oil", quote="10 million barrels per day in 2026")],
-                evidence_spans=["EIA forecasts production"], summary_zh="产量预测", needs_review=False, review_reasons=[])
+                evidence_spans=["EIA forecasts production"], summary_zh="Production forecast", needs_review=False, review_reasons=[])
 
 
 def test_exact_coverage_and_quotes(module, passage, label):
@@ -79,7 +79,7 @@ def test_authored_decisions_expand_without_inference(module, passage, tmp_path):
     write_jsonl(module.DATA / "passages.jsonl", [passage])
     root = Path(module.prepare(1)["path"])
     decision = dict(n=1, topics=["production_supply"], relevance="direct", state="forecast", entities=["EIA"],
-                    spans=["EIA forecasts production"], summary="未来产量预测",
+                    spans=["EIA forecasts production"], summary="Future production forecast",
                     q=[["10", "million barrels per day", "2026", "crude_oil", "10 million barrels per day in 2026"]])
     write_json(tmp_path / "decisions.json", [decision])
     result = module.import_decisions(root, 1, tmp_path / "decisions.json")
@@ -126,13 +126,13 @@ def test_review_revision_preserves_original_output(module, passage, label, tmp_p
     write_jsonl(module.DATA / "passages.jsonl", [passage])
     root = Path(module.prepare(1)["path"])
     write_json(root / "outputs/batch-001.json", dict(labels=[label]))
-    label["summary_zh"] = "修正后的预测说明"
+    label["summary_zh"] = "Corrected forecast explanation"
     write_json(tmp_path / "revision.json", dict(labels=[label]))
     report = module.revise_batch(root, 1, tmp_path / "revision.json", "Remove unsupported detail")
     archives = list((root / "revisions/batch-001").glob("*/labels.json"))
     assert report["revised"] and len(archives) == 1
     old = json.loads(archives[0].read_text(encoding="utf-8"))["labels"][0]
-    assert old["summary_zh"] == "产量预测"
+    assert old["summary_zh"] == "Production forecast"
     assert module.progress(root)["validated"] == 1
 
 

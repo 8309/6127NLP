@@ -13,6 +13,7 @@ models/
 tmp/
 reports/*
 !reports/progress.json
+!reports/english_publication.json
 logs/
 *.log
 *.sqlite

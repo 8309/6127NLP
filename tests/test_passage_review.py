@@ -19,7 +19,7 @@ def prepared(tmp_path, monkeypatch):
              url="https://example.org", text="EIA forecasts production of 10 million barrels per day in 2026.")
     label = dict(passage_id="p", topics=["production_supply"], oil_relevance="direct", entities=["EIA"],
                  event_status="forecast", events=[], quantities=[], evidence_spans=["EIA forecasts production"],
-                 summary_zh="产量为预测", needs_review=True, review_reasons=["预测需核对"],
+                 summary_zh="Production is forecast", needs_review=True, review_reasons=["Forecast needs review"],
                  provenance="codex_model_passage_annotation", human_reviewed=False)
     write_jsonl(tmp_path / "passages.jsonl", [p])
     write_jsonl(tmp_path / "raw/d.html", [])
@@ -40,7 +40,7 @@ def blind_complete(m, root, label):
 
 
 def judgment():
-    return dict(n=1, outcome="confirmed", choice="old", note="原文明确预测，无需保持歧义标记。",
+    return dict(n=1, outcome="confirmed", choice="old", note="The source explicitly forecasts production; no ambiguity flag is needed.",
                 remaining_reasons=[], exclude=False, support=[["focus", "EIA forecasts production"]])
 
 
@@ -83,7 +83,7 @@ def test_tampered_comparison_rejected(prepared):
     m.compare(root)
     p = root / "comparisons/batch-001.jsonl"
     rows = read_jsonl(p)
-    rows[0]["old_label"]["summary_zh"] = "篡改"
+    rows[0]["old_label"]["summary_zh"] = "Tampered"
     write_jsonl(p, rows)
     write_json(root / "judge.json", [judgment()])
     with pytest.raises(ValueError, match="Comparison"):
@@ -159,19 +159,19 @@ def test_append_only_judgment_revision_preserves_worker_audit(prepared):
     accepted = (root / "judgments/batch-001.json").read_bytes()
     audit = (root / "judgment_audit/batch-001.json").read_bytes()
     revised = judgment()
-    revised["note"] = "按既定规范核对，保留旧标签。"
+    revised["note"] = "Reviewed under the established protocol; retain the original label."
     write_json(root / "revision.json", [revised])
-    m.revise_judgments(root, 1, root / "revision.json", "parent", "统一既定规范")
+    m.revise_judgments(root, 1, root / "revision.json", "parent", "Apply the established protocol consistently")
     assert (root / "judgments/batch-001.json").read_bytes() == accepted
     assert (root / "judgment_audit/batch-001.json").read_bytes() == audit
     rows, actors = m.effective_judgments(root, 1)
     assert rows == [revised] and actors == {1: "parent"}
     assert m.progress(root)["reviewed"] == 1
     with pytest.raises(ValueError, match="preserve"):
-        m.revise_judgments(root, 1, root / "revision.json", "parent", "重复")
+        m.revise_judgments(root, 1, root / "revision.json", "parent", "Duplicate")
     m.publish(root)
     with pytest.raises(ValueError, match="new run"):
-        m.revise_judgments(root, 1, root / "revision.json", "parent", "已发布")
+        m.revise_judgments(root, 1, root / "revision.json", "parent", "Already published")
 
 
 def test_tampered_revision_rejected(prepared):
@@ -181,7 +181,7 @@ def test_tampered_revision_rejected(prepared):
     write_json(root / "judge.json", [judgment()])
     m.import_judgments(root, 1, root / "judge.json", "worker")
     write_json(root / "revision.json", [judgment()])
-    result = m.revise_judgments(root, 1, root / "revision.json", "parent", "复查")
+    result = m.revise_judgments(root, 1, root / "revision.json", "parent", "Review")
     write_json(root / f"judgment_revisions/batch-001/{result['revision']}/judgments.json", {})
     with pytest.raises(ValueError, match="Revision audit"):
         m.progress(root)

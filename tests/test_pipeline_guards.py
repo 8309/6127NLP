@@ -58,9 +58,16 @@ def test_changed_corpus_rejects_old_dense_index(tmp_path, monkeypatch):
         retriever.search("oil",mode="dense")
 
 
-def test_formal_evaluation_rejects_unfrozen_pilot(tmp_path):
-    from oil_evidence.evaluation import run_experiments
+def test_formal_evaluation_rejects_unfrozen_pilot(tmp_path, monkeypatch):
+    from oil_evidence import evaluation
+    # This guard must work in a clean clone without the excluded real corpus.
+    corpus = tmp_path / "synthetic-corpus"
+    corpus.mkdir()
+    (corpus / "passages.jsonl").write_text(
+        json.dumps(dict(passage_id="fixture-only", text="Synthetic crude oil evidence.")) + "\n",
+        encoding="utf-8")
+    monkeypatch.setattr(evaluation, "DATA", corpus)
     f = tmp_path/"pilot.jsonl"
     f.write_text(json.dumps(dict(question="What is oil?",record_id="q"))+"\n")
     with pytest.raises(ValueError, match="frozen"):
-        run_experiments(f,smoke=False)
+        evaluation.run_experiments(f,smoke=False)

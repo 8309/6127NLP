@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "exported_utc": "2026-10-12T07:25:01.526678+00:00",
-  "status": "source_buffer_closeout_complete_new_corpus_staged_not_published",
+  "exported_utc": "2026-10-12T09:42:14.330686+00:00",
+  "status": "source_buffer_closeout_complete_new_index_verified_staged_not_published",
   "publication_scope": "Code, documentation and whitelisted aggregate metrics only; original data and labels excluded.",
   "corpus": {
     "passages": 11815,
@@ -44,7 +44,8 @@
     "errors": [],
     "byte_rebuilt_artifact_classes": 4,
     "implementation_files": 19,
-    "index_verified": false
+    "index_verified": false,
+    "scope": "Historical source-closeout reconstruction audit; current index is reported separately."
   },
   "machine_source_qa": {
     "fixed_cases": 66,
@@ -63,7 +64,7 @@
     "existing_machine_reviews": 728
   },
   "release": {
-    "new_index_created": false,
+    "new_index_created": true,
     "published": false,
     "evaluation_set_frozen": false,
     "formal_assignment_complete": false
@@ -76,12 +77,51 @@
     "tests": "5a4e3a6576f509a07e495eec1140b2168692d2873f0c5b29cef49e740637f9b2",
     "reconstruction_audit": "ab8d1633c3101e694876d09bfa1cef09345b85977d0a4437281094fd469f34ff",
     "legacy_fixed_review": "e8fc2574f36e0b3de927b757d98b857180a617809ecfbeff4b95e04379d552af",
-    "new_fixed_review": "07eae526cce1b259c22655307432fc9016925e9ee690531d804ab96621c634c8"
+    "new_fixed_review": "07eae526cce1b259c22655307432fc9016925e9ee690531d804ab96621c634c8",
+    "index_build": "078cb0ce97edb894837a87a088f56e265c70c0823eac7e0f16c3062433f11576",
+    "indexed_source_audit": "f1f2b6587737be111fd7a0b68db4015c42fdbad39c416a26a8c92ed3d95cce5f",
+    "index_smoke": "7e9b4b246a99866364df14e3446b438e36f9d7927bc0c3afdacfc7b761302eaa"
   },
   "limitations": [
     "No raw documents, corpus, annotation records, databases or indexes are shipped.",
     "Historical reconstruction requires the excluded matching local snapshots.",
     "Machine source checks are neither human gold labels nor whole-corpus approval.",
-    "Course approval, held-out evaluation and new retrieval/publication remain pending."
-  ]
+    "Course approval, held-out evaluation, formal retrieval comparison and publication remain pending.",
+    "Index integrity and optional operational smoke do not establish retrieval accuracy or resolve the prior failed comparison."
+  ],
+  "current_index": {
+    "status": "staged_index_verified_not_published",
+    "passages": 11815,
+    "model": "BAAI/bge-small-en-v1.5",
+    "dimension": 384,
+    "vectors_shape": [
+      11815,
+      384
+    ],
+    "vectors_dtype": "float32",
+    "elapsed_seconds": 1440.617,
+    "corpus_sha256": "62dde606a50bda9c7404231498c5dc83f0cd4a36f1259540f2ae377f7ca767cd",
+    "vectors_sha256": "1ca739750f5149904244c7d00a73e69018d576c053d212ce9de9bf12e1a3831a",
+    "manifest_sha256": "920dadb72a7a16cb9a7b032a98467170bc8559cef7023fa2a94dce821a2d7dd2",
+    "index_verified": true,
+    "protected_files_unchanged": true,
+    "scope": "Unpublished staged index; integrity is not retrieval accuracy or a release gate."
+  },
+  "retrieval_smoke": {
+    "status": "operational_smoke_passed_not_formal_evaluation",
+    "checks": 24,
+    "errors": [],
+    "passages": 11815,
+    "bm25_documents": 11815,
+    "modes": [
+      "bm25",
+      "dense",
+      "hybrid"
+    ],
+    "exact_offsets_verified": true,
+    "date_and_region_filters_verified": true,
+    "inputs_unchanged": true,
+    "human_gold": false,
+    "scope": "Operational filtering and provenance checks only; no answer accuracy or formal evaluation."
+  }
 }

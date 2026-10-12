@@ -94,28 +94,28 @@ for passage in result["evidence"]:
 app = AppTest.from_file(str(DATA.parent / "app.py"), default_timeout=60).run()
 assert not app.exception, str(app.exception)
 assert len(app.tabs) == 4
-assert any(tab.label == "段落标签" for tab in app.tabs)
+assert any(tab.label == "Passage labels" for tab in app.tabs)
 passage_progress = DATA / "reports/passage_annotation_progress.json"
 if passage_progress.exists():
-    assert any("原文段落标注" in s.value for s in app.subheader)
+    assert any("source passage annotations" in s.value for s in app.subheader)
 if paragraph_labels:
-    assert any(f"当前检索段标签覆盖：{coverage:,} / {len(passages):,}" in s.value for s in app.caption)
+    assert any(f"Current retrieval passage label coverage: {coverage:,} / {len(passages):,}" in s.value for s in app.caption)
     if annotation_rows != passages:
-        assert any("旧版本标注存档" in s.value for s in app.info)
-    assert len(next(s for s in app.selectbox if s.label == "原文段落").options) == len(paragraph_labels)
-    next(c for c in app.checkbox if c.label == "只看段落中的歧义 / 待核对项").check().run()
+        assert any("Archived annotations" in s.value for s in app.info)
+    assert len(next(s for s in app.selectbox if s.label == "Source passage").options) == len(paragraph_labels)
+    next(c for c in app.checkbox if c.label == "Show only ambiguous passages / Items needing review").check().run()
     assert not app.exception
-    assert len(next(s for s in app.selectbox if s.label == "原文段落").options) == sum(r["needs_review"] for r in paragraph_labels)
-    next(c for c in app.checkbox if c.label == "只看段落中的歧义 / 待核对项").uncheck().run()
-    next(t for t in app.text_input if t.label.startswith("段落标签搜索")).set_value("Brent").run()
+    assert len(next(s for s in app.selectbox if s.label == "Source passage").options) == sum(r["needs_review"] for r in paragraph_labels)
+    next(c for c in app.checkbox if c.label == "Show only ambiguous passages / Items needing review").uncheck().run()
+    next(t for t in app.text_input if t.label.startswith("Passage label search")).set_value("Brent").run()
     expected = sum("brent" in (annotation_by_id[r["passage_id"]]["title"] + " " + r["summary_zh"] + " " + " ".join(r["entities"])).casefold() for r in paragraph_labels)
     assert not app.exception and expected > 0
-    assert len(next(s for s in app.selectbox if s.label == "原文段落").options) == expected
-    next(t for t in app.text_input if t.label.startswith("段落标签搜索")).set_value("").run()
-    next(s for s in app.selectbox if s.label == "段落主题筛选").select("production_supply").run()
+    assert len(next(s for s in app.selectbox if s.label == "Source passage").options) == expected
+    next(t for t in app.text_input if t.label.startswith("Passage label search")).set_value("").run()
+    next(s for s in app.selectbox if s.label == "Passage topic filter").select("production_supply").run()
     assert not app.exception
-    assert len(next(s for s in app.selectbox if s.label == "原文段落").options) == sum("production_supply" in r["topics"] for r in paragraph_labels)
-    next(s for s in app.selectbox if s.label == "段落主题筛选").select("all").run()
+    assert len(next(s for s in app.selectbox if s.label == "Source passage").options) == sum("production_supply" in r["topics"] for r in paragraph_labels)
+    next(s for s in app.selectbox if s.label == "Passage topic filter").select("all").run()
     second_reviews = read_jsonl(DATA / "annotations/passage_review.jsonl")
     if second_reviews:
         assert len(second_reviews) == 728 and len({r["passage_id"] for r in second_reviews}) == 728
@@ -123,28 +123,28 @@ if paragraph_labels:
         second_report = json.loads((DATA / "reports/passage_review.json").read_text(encoding="utf-8"))
         assert second_report["reviews_sha256"] == digest((DATA / "annotations/passage_review.jsonl").read_bytes())
         for outcome in ["confirmed", "corrected", "unresolved"]:
-            next(s for s in app.selectbox if s.label == "机器二次复核结果").select(outcome).run()
+            next(s for s in app.selectbox if s.label == "Second-pass machine review result").select(outcome).run()
             expected = sum(r["outcome"] == outcome for r in second_reviews)
             assert not app.exception
-            paragraph_boxes = [s for s in app.selectbox if s.label == "原文段落"]
+            paragraph_boxes = [s for s in app.selectbox if s.label == "Source passage"]
             assert (len(paragraph_boxes[0].options) if paragraph_boxes else 0) == expected
-        next(s for s in app.selectbox if s.label == "机器二次复核结果").select("all").run()
+        next(s for s in app.selectbox if s.label == "Second-pass machine review result").select("all").run()
 if codex:
-    assert next(s for s in app.selectbox if s.label == "审核数据").value == "codex"
-    assert next(c for c in app.checkbox if c.label.startswith("显示模型")).value
-    assert any("Codex 核对结论" in s.value for s in app.subheader)
-    assert any("不能" in s.value or "预测" in s.value for s in app.markdown)
-    next(s for s in app.selectbox if s.label == "核对结果筛选").select("部分可答 / 证据不足").run()
-    assert not app.exception and len(next(s for s in app.selectbox if s.label == "记录").options) == 22
-    next(s for s in app.selectbox if s.label == "核对结果筛选").select("已修正").run()
-    assert not app.exception and len(next(s for s in app.selectbox if s.label == "记录").options) == 16
-    next(s for s in app.selectbox if s.label == "核对结果筛选").select("全部").run()
-next(b for b in app.button if b.label == "查询").click().run()
+    assert next(s for s in app.selectbox if s.label == "Review dataset").value == "codex"
+    assert next(c for c in app.checkbox if c.label.startswith("Show model")).value
+    assert any("Codex review result" in s.value for s in app.subheader)
+    assert any(codex[0]["codex_review"]["note_zh"] in s.value for s in app.markdown)
+    next(s for s in app.selectbox if s.label == "Review result filter").select("Partially answerable / Insufficient evidence").run()
+    assert not app.exception and len(next(s for s in app.selectbox if s.label == "Record").options) == 22
+    next(s for s in app.selectbox if s.label == "Review result filter").select("Corrected").run()
+    assert not app.exception and len(next(s for s in app.selectbox if s.label == "Record").options) == 16
+    next(s for s in app.selectbox if s.label == "Review result filter").select("All").run()
+next(b for b in app.button if b.label == "Search").click().run()
 assert not app.exception and not app.error, str(app.exception) + str(app.error)
 assert app.session_state["query_result"]["evidence"]
-next(s for s in app.selectbox if s.label == "审核数据").select("candidates").run()
+next(s for s in app.selectbox if s.label == "Review dataset").select("candidates").run()
 assert not app.exception and not app.error, str(app.exception) + str(app.error)
-assert any(b.label == "保存人工判断" for b in app.button)
+assert any(b.label == "Save human judgment" for b in app.button)
 with sqlite3.connect(DATA / "model_usage.sqlite3") as db:
     assert db.execute("SELECT COUNT(*) FROM calls").fetchone()[0] == paid_before
     calls = [dict(zip(["model", "status", "count", "estimated_or_reserved_usd"], row)) for row in
