@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "exported_utc": "2026-10-12T07:25:01.526678+00:00",
+  "status": "source_buffer_closeout_complete_new_corpus_staged_not_published",
+  "publication_scope": "Code, documentation and whitelisted aggregate metrics only; original data and labels excluded.",
+  "corpus": {
+    "passages": 11815,
+    "words": 1562715,
+    "unique_words": 28582,
+    "contributing_documents": 1527,
+    "cleaned_source_pages": 5703,
+    "minimum_passages": 10000,
+    "passage_buffer": 1815,
+    "passage_buffer_percent": 18.15,
+    "inherited_labels": 0,
+    "sha256": "62dde606a50bda9c7404231498c5dc83f0cd4a36f1259540f2ae377f7ca767cd",
+    "source_pages_sha256": "216a2ab26ae02605b1ad2373426406cf1415d735c29c4e46c13b1b00ea1c0507"
+  },
+  "segmentation": {
+    "target_words": 160,
+    "soft_minimum_words": 65,
+    "soft_maximum_words": 240,
+    "maximum_context_words": 480,
+    "parameters_unchanged": true
+  },
+  "source_holds": {
+    "physical_pages": 215,
+    "full_appendices": 185,
+    "trailing_reference_pages": 29,
+    "unverified_tail_page": 1,
+    "mixed_start_page_body_loss_disclosed": true,
+    "originals_retained": true,
+    "repaired_report_final_passages": 941
+  },
+  "tests": {
+    "passed": 1171,
+    "skipped": 1,
+    "failed": 0,
+    "elapsed_seconds": 222.64,
+    "skip_reason": "tests/test_corpus_versions.py:177: Host disallows symlink creation"
+  },
+  "tests_origin": "Recorded local run, not GitHub Actions",
+  "source_reconstruction": {
+    "errors": [],
+    "byte_rebuilt_artifact_classes": 4,
+    "implementation_files": 19,
+    "index_verified": false
+  },
+  "machine_source_qa": {
+    "fixed_cases": 66,
+    "additional_legacy_diagnostics": 2,
+    "total_original_cases_preserved": 68,
+    "new_original_critical_cases_excluded_not_passed": 7,
+    "warnings_retained": 34,
+    "remaining_known_sample_criticals": 0,
+    "human_gold": false,
+    "whole_corpus_approved": false
+  },
+  "default_corpus": {
+    "passages": 10079,
+    "archived_original_paragraph_machine_labels": 4500,
+    "existing_machine_qa_records": 100,
+    "existing_machine_reviews": 728
+  },
+  "release": {
+    "new_index_created": false,
+    "published": false,
+    "evaluation_set_frozen": false,
+    "formal_assignment_complete": false
+  },
+  "new_tracked_paid_api_calls": 0,
+  "new_human_labels": 0,
+  "codex_subscription_credit_usage": "Not measured",
+  "local_receipt_sha256": {
+    "completion_checkpoint": "bf92e08eec4fa8e74eb92b3a0633864094996b38c3e60d03c48d80cd96f6b034",
+    "tests": "5a4e3a6576f509a07e495eec1140b2168692d2873f0c5b29cef49e740637f9b2",
+    "reconstruction_audit": "ab8d1633c3101e694876d09bfa1cef09345b85977d0a4437281094fd469f34ff",
+    "legacy_fixed_review": "e8fc2574f36e0b3de927b757d98b857180a617809ecfbeff4b95e04379d552af",
+    "new_fixed_review": "07eae526cce1b259c22655307432fc9016925e9ee690531d804ab96621c634c8"
+  },
+  "limitations": [
+    "No raw documents, corpus, annotation records, databases or indexes are shipped.",
+    "Historical reconstruction requires the excluded matching local snapshots.",
+    "Machine source checks are neither human gold labels nor whole-corpus approval.",
+    "Course approval, held-out evaluation and new retrieval/publication remain pending."
+  ]
+}
