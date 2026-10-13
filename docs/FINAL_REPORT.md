@@ -68,7 +68,7 @@ Hybrid retrieval combines the sparse and dense ranks using reciprocal rank fusio
 
 The Streamlit interface provides query entry, cutoff and region controls, evidence cards, original-source links, machine-annotation review and passage-label inspection. Evidence cards expose identifiers, source dates and full text so that users can inspect claims rather than rely on a fluent answer alone. The application binds to localhost and is not an authenticated public service. [3]
 
-The final demonstration should save five fresh runs on one explicitly selected corpus. The following questions come from the public question seeds; they are demonstration choices, not test-set ground truth. [5]
+Five fresh demonstration queries were run on the verified 11,815-passage staging corpus using hybrid retrieval at depth five. The following questions come from the public seeds; they are demonstration choices, not test-set ground truth. [5][16]
 
 | Question | Cutoff | Demonstration purpose |
 |---|---|---|
@@ -78,7 +78,11 @@ The final demonstration should save five fresh runs on one explicitly selected c
 | Which sanctions affecting Russian oil were effective as of 2025-02-01? | 2025-02-01 | Inspect legal dates and the scope of the policy evidence |
 | What exact Brent price will occur next month, according to verified evidence? | 2026-10-05 | Avoid presenting a forecast as a certain future observation |
 
-The new index passed 24 real operational checks across BM25, dense and hybrid modes, including cutoff, region and exact source-offset checks. The English publication edition separately passed a synthetic four-tab interface smoke test. Five historical API answer examples exist on an earlier 2,176-passage snapshot, but they are not fresh outputs or quality measurements for the current staging corpus. Fresh five-query results and their retrieval and end-to-end latency values remain required. [1][3][6]
+The five cases retrieved 25 passages and generated five cited answers in one fresh Codex execution. Retrieval took 0.087971, 0.062281, 0.068672, 0.064153 and 0.081456 seconds respectively, after an excluded warm-up. Shared batch generation took 29.931725 seconds and emitted 27,281 input and 1,240 output tokens. That batch duration is not five independently measured generation latencies; per-query generation and end-to-end values remain unmeasured. All 14 saved artifact hashes matched their receipt. [16]
+
+The first answer cites dated EIA production forecasts and explicitly says they are not a current 2026 outlook. The historical-outlook answer also states that retrieval did not establish the latest June 2025 outlook. The OPEC and Russia-policy answers disclose missing implementation or completeness evidence. The exact future Brent-price question returns no factual claims. These limitations are actual saved generator outputs, not reference labels or independently verified quality scores. In particular, historical-date eligibility alone does not retrieve the newest relevant report. [16]
+
+The new index also passed 24 earlier operational checks, and the English publication passed a synthetic four-tab interface smoke. Five older API examples on a 2,176-passage snapshot remain historical and are not substituted for the new demonstration. No separate verifier or quality judge ran in the new five-case batch. [1][3][6][16]
 
 ## Q3 Retrieval improvements and ranked evaluation
 
@@ -190,5 +194,6 @@ The final submission must replace this draft with a checked PDF named for the gr
 13. [EIA Crude oil prices and refinery margins generally increased throughout the third quarter](https://www.eia.gov/todayinenergy/detail.php?id=68245), source-registry publication date 2026-10-05.
 14. [Treasury Sanctions International Network Smuggling Oil from Libya to Europe](https://home.treasury.gov/news/press-releases/sm0298/), source-registry publication date 2018-02-26.
 15. [DOE Announces Notice of Sale of Crude Oil from the Strategic Petroleum Reserve](https://www.energy.gov/articles/doe-announces-notice-sale-crude-oil-strategic-petroleum-reserve), source-registry publication date 2019-02-28.
+16. Retained local five-query demonstration: `data/machine_runs/coursework-demo/2026-10-13T00-37-20.834578+00-00-50342469/result.json`, SHA-256 `e06c5014238183549af92295d6e2167cd922be2db4371f506f4f123a82d6de5f`. [Execution implementation](../scripts/run_coursework_demo.py). The saved HTML, five traces and original batch response are local, not public data links.
 
 The final source registry should supply the remaining exact official document URLs, archive hashes and redistribution decisions. The three document examples above do not provide a complete redistributable data package.

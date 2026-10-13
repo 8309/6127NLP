@@ -16,7 +16,7 @@ import re
 import unicodedata
 
 
-SCHEMA_VERSION = "machine-qa-v1"
+SCHEMA_VERSION = "machine-qa-v2"
 ANSWERABILITY = ("insufficient", "partial", "sufficient")
 EVENT_STATUS = ("announced", "effective", "observed", "recovered", "uncertain", "not_applicable")
 INPUT_KEYS = {"record_id", "question", "as_of", "event_group", "split", "region"}
@@ -272,8 +272,12 @@ def validate_label(label, packet, complete=True):
             errors.append("Every answer point needs citations with exact eligible quotes")
     if label["answerability"] in {"sufficient", "partial"} and not points:
         errors.append("Answerable label lacks supported answer points")
-    if label["answerability"] == "insufficient" and (points or quotes):
-        errors.append("Insufficient label must not invent supported answer points or quotes")
+    # An exact eligible quote may explain an evidence gap without answering the
+    # requested quantity (e.g. a tanker designation is not measured export loss).
+    # Keep every quote/span/date/relevance guard above; prohibit invented answer
+    # points, not the source text that supports an insufficiency explanation.
+    if label["answerability"] == "insufficient" and points:
+        errors.append("Insufficient label must not invent supported answer points")
     reasons = label["reasons"]
     if not isinstance(reasons, list) or not reasons or any(not isinstance(r, str) or not r.strip() for r in reasons):
         errors.append("Support or insufficiency reasons are required")
@@ -507,8 +511,10 @@ def build_manifest(artifacts, runtime_hashes=None):
     observed_available = a_observed is not None and b_observed is not None
     same_observed = observed_available and (a_service, a_observed) == (b_service, b_observed)
     same_requested = (a_service, a_requested) == (b_service, b_requested)
-    pairing = ("same_model_repeat" if same_observed or not observed_available and same_requested
-               else "different_observed_model_ids" if observed_available else "observed_model_identity_unavailable")
+    pairing = ("same_model_repeat" if same_observed
+               else "different_observed_model_ids" if observed_available
+               else "same_requested_model_unverified" if same_requested
+               else "observed_model_identity_unavailable")
     agreement = raw_agreement(inputs, left_rows, right_rows)
     if agreement["paired_records"] != len(inputs):
         raise ValueError("Independent contexts conflict")

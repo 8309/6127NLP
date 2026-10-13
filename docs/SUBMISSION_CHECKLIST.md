@@ -48,7 +48,7 @@ The staged corpus has not been released as the default library. The existing 10,
 - [ ] Report answer quality, citation support, time errors and insufficiency handling with evaluator provenance.
 - [x] Measure warm sequential retrieval median and p95 on the initial 50 questions in all three modes at depth 10. This is development-only operational latency.
 - [ ] Measure final held-out retrieval and end-to-end latency, concurrent throughput and actual run costs on recorded hardware; distinguish recorded CLI token usage from unmeasured subscription-credit consumption.
-- [ ] Save five fresh UI query outputs with corpus identity, citations, cutoff, source links and speed.
+- [x] Save five fresh cited query traces and an HTML results view on the verified staged corpus, including query cutoffs, source links and per-query retrieval speed. One native batch generates all five answers; individual generation latency and live query-entry UI verification remain separate.
 - [ ] Pass the applicable source and retrieval release gates before connecting the staging library to the default workbench.
 
 The earlier hybrid-support decline from 9/12 to 8/12 remains a failed diagnostic, not a passing new-version result. A successful fixture suite cannot replace the ranked or downstream evaluation.
@@ -59,7 +59,7 @@ This manifest distinguishes files that exist from artifacts that still need to b
 
 | Deliverable | Actual artifact or required content | State |
 |---|---|---|
-| Final report PDF | Group-named PDF with cover, Q1 to Q5, actual results, failures and references | Not produced |
+| Final report PDF | Group-named PDF with cover, Q1 to Q5, actual results, failures and references | Draft PDF rendered and visually checked; final results and naming pending |
 | Report source | [FINAL_REPORT.md](FINAL_REPORT.md) | Draft exists |
 | Source code archive | Versioned `src/`, `scripts/`, `app.py`, configuration, tests and licenses | Not packaged |
 | Library and environment archive | Dependency manifest, `uv.lock`, runtime/version instructions and permitted dependencies | Not packaged; do not assume model-weight redistribution rights |

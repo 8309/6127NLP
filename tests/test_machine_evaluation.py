@@ -163,6 +163,32 @@ def test_exact_cutoff_supported_label_valid(scenario):
     assert module.validate_independent_output(scenario["left"][0], packet) == []
 
 
+def test_insufficient_may_quote_eligible_background_without_answer_points(scenario):
+    label = deepcopy(scenario["left"][0]["label"])
+    label.update(answerability="insufficient", answer_points=[], reasons=[
+        "The source discusses transport, not the requested measured export loss."])
+    label["quotes"] = [dict(passage_id="p-background", text="discusses crude oil transport")]
+    assert module.validate_label(label, scenario["inputs"]["q-1"]) == []
+
+
+@pytest.mark.parametrize("case", ["future", "undated", "fabricated", "irrelevant", "invented_answer"])
+def test_insufficiency_background_quotes_keep_all_support_guards(scenario, case):
+    label = deepcopy(scenario["left"][0]["label"])
+    label.update(answerability="insufficient", answer_points=[], reasons=["Requested physical effect is not established."])
+    if case in {"future", "undated"}:
+        pid = "p-" + case
+        by_id = {row["passage_id"]: row for row in scenario["corpus"]}
+        label["quotes"] = [dict(passage_id=pid, text=by_id[pid]["text"])]
+        label["qrels"][pid] = 1
+    elif case == "fabricated":
+        label["quotes"][0]["text"] = "A nonexistent measured loss"
+    elif case == "irrelevant":
+        label["qrels"]["p-current"] = 0
+    else:
+        label["answer_points"] = [dict(text="An invented export reduction.", citations=["p-current"])]
+    assert module.validate_label(label, scenario["inputs"]["q-1"])
+
+
 @pytest.mark.parametrize("case", ["future_qrel", "undated_qrel", "boolean_qrel", "missing_qrel", "wrong_quote",
                                   "quote_without_positive_qrel", "unsupported_point", "no_points", "insufficient_with_points",
                                   "invalid_answerability", "invalid_event", "no_reason", "extra_field"])
@@ -410,7 +436,7 @@ def test_same_requested_model_with_unavailable_observation_never_forges_observed
     scenario["artifacts"].update(independent_a=jsonl(scenario["left"]), independent_b=jsonl(scenario["right"]),
                                  adjudications=jsonl(scenario["decisions"]))
     manifest = module.build_manifest(scenario["artifacts"])
-    assert manifest["annotation_protocol"] == "same_model_repeat"
+    assert manifest["annotation_protocol"] == "same_requested_model_unverified"
     assert manifest["observed_identity_available_for_both"] is False
     assert manifest["model_diversity_established"] is False
     assert all(identity["model"] is None for identity in manifest["observed_annotator_identities"])

@@ -13,6 +13,8 @@ This is the English publication edition. Historical verification receipts refer 
 - [ ] Complete the 50-record annotation pilot, measure agreement and inspect disagreements before freezing the test protocol.
 - [ ] Prepare the remaining event-isolated QA questions and full 1,000-record test set without copying authoring answers into the annotator input or treating authoring anchors as complete relevance judgments.
 - [ ] Independently annotate and adjudicate the machine-only cohort, freeze a separate machine manifest, then execute retrieval evaluation and base/A/B/AB answer experiments.
+- [x] Generate five real cited answers on the 11,815-passage stage with saved HTML and per-query retrieval timings; one fresh native batch takes 29.931725 seconds. Retain its 27,281 input/1,240 output token receipt once, not once per query. This is a demonstration without an independent verifier/judge or measured individual generation latency.
+- [x] Render and visually check an eight-page Q1-Q5 draft with blank cover identifiers, an evidence-flow diagram and actual retrieval latency figure. It remains a draft until the held-out evaluation and ablations are complete.
 - [ ] Finalize the evidence-backed Q1-Q5 report, figures, presentation, permitted data/results archive, code archive and submission links. Leave identity fields blank as requested; do not submit to Blackboard automatically.
 
 ## English publication verification

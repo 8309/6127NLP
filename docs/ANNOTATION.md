@@ -31,6 +31,18 @@ This plan creates no new model calls. Later DeepSeek execution remains subject t
 
 ## Human workflow
 
+Machine protocol v2 permits exact, eligible background quotes in an insufficient
+label when they explain the evidence gap. For example, a notice identifying
+tankers can establish that an action was announced without measuring an export
+loss. An insufficient label still has no supported answer points; quotation,
+source-date and positive-relevance guards remain mandatory. The v1 false
+rejection and raw labels are retained separately. This is a schema correction,
+not a change to semantic judgments or a way to increase measured agreement.
+
+If execution metadata does not expose the actual model, a repeated requested
+alias is recorded as `same_requested_model_unverified`, with observed IDs null.
+It does not establish that the runtime model or backend version was identical.
+
 Read question and evidence before revealing model suggestions. Record judgment, supporting spans and corrections. If model suggestions were viewed, provenance is human_reviewed, not human_independent. Reviewer identity is a real person, not model name or multiple aliases for the same individual.
 
 The first 50 records test feasibility; source-reading templates must be rewritten into standalone research questions before final acceptance. The 30 seed questions are unreviewed proposals; an 'insufficient' question type is a design intent, not a gold answerability label.
