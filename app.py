@@ -3,38 +3,58 @@ from html import escape
 import json
 import os
 import time
+from pathlib import Path
 
 import streamlit as st
 
 from oil_evidence.annotations import agreement, validate_record
 from oil_evidence.corpus_versions import annotation_passages, active_label_coverage, original_parent
 from oil_evidence.query import query
+from oil_evidence.codex_runtime import load_staged_runtime, query_codex
 from oil_evidence.retrieval import Retriever
 from oil_evidence.store import DATA, config, digest, latest_reviews, read_jsonl, save_review, mark_suggestion_view, has_suggestion_view
 
 st.set_page_config(page_title="Oil Evidence", page_icon="🛢", layout="wide")
 st.title("Oil Evidence · Crude Oil Evidence Workbench")
+staged_root = os.environ.get("OIL_CANONICAL_ROOT")
+staged_run = os.environ.get("OIL_STAGED_RUN", "semantic-page-v2-buffer")
+provider_options = ["codex", "deepseek"]
+provider_default = os.environ.get("OIL_GENERATION_PROVIDER", "codex")
+provider = st.sidebar.selectbox("Generation provider", provider_options,
+    index=provider_options.index(provider_default) if provider_default in provider_options else 0,
+    format_func=lambda value: "Codex · Existing ChatGPT login" if value == "codex" else "DeepSeek · Optional API")
 with st.sidebar.expander("Model connection · Local process"):
-    st.caption("DeepSeek V4.1 Flash is configured with a cumulative estimated budget of USD 5. Keys are not saved to files.")
-    with st.form("runtime_key"):
-        runtime_key = st.text_input("DeepSeek API key", type="password")
-        use_key = st.form_submit_button("Use only in the current server process")
-    if use_key:
-        if runtime_key.strip():
-            os.environ[config()["llm"]["api_key_env"]] = runtime_key.strip()
-            st.success("Configured for this process; the key expires when the server stops.")
-        else:
-            st.error("The key is empty.")
-    st.caption("Connection status: " + ("A key is set for this process" if os.environ.get(config()["llm"]["api_key_env"]) else "No key is set; source preview remains available"))
+    if provider == "codex":
+        st.caption("No API key is needed. Native Codex uses the existing local ChatGPT login; source text is supplied as data and model tools are disabled.")
+        st.caption("Subscription credits and dollar cost are not measured. Native token usage and actual elapsed time are retained for each invocation.")
+    else:
+        st.caption("DeepSeek remains optional, with the existing cumulative estimated USD 5 budget. Keys are not saved to files.")
+        with st.form("runtime_key"):
+            runtime_key = st.text_input("DeepSeek API key", type="password")
+            use_key = st.form_submit_button("Use only in the current server process")
+        if use_key:
+            if runtime_key.strip():
+                os.environ[config()["llm"]["api_key_env"]] = runtime_key.strip()
+                st.success("Configured for this process; the key expires when the server stops.")
+            else:
+                st.error("The key is empty.")
+        st.caption("Connection status: " + ("A key is set for this process" if os.environ.get(config()["llm"]["api_key_env"]) else "No key is set; source preview remains available"))
+        if staged_root:
+            st.warning("The staged Codex workbench does not invoke DeepSeek or create a new budget ledger. Use the original configured workbench for that optional path.")
+if staged_root:
+    st.info("Read-only staged library: " + staged_run + ". The original default library and archived labels are not switched or rewritten.")
 search_tab, review_tab, passage_tab, status_tab = st.tabs(["Evidence search", "Annotation review", "Passage labels", "Data and progress"])
 
 # Existing annotations always use their frozen text version, never child IDs.
-try:
-    annotation_rows = annotation_passages()
-    annotation_map = {p["passage_id"]: p for p in annotation_rows}
-except ValueError as exc:
-    st.error("Annotation corpus version validation failed: " + str(exc))
-    st.stop()
+if staged_root:
+    annotation_rows, annotation_map = [], {}
+else:
+    try:
+        annotation_rows = annotation_passages()
+        annotation_map = {p["passage_id"]: p for p in annotation_rows}
+    except ValueError as exc:
+        st.error("Annotation corpus version validation failed: " + str(exc))
+        st.stop()
 
 
 @st.cache_resource
@@ -42,7 +62,21 @@ def load_retriever(corpus_mtime, index_mtime):
     return Retriever()
 
 
+@st.cache_resource
+def load_staged(root, run, receipt_mtime):
+    return load_staged_runtime(root, run)
+
+
+def get_staged_runtime():
+    if not staged_root:
+        raise ValueError("Start with scripts/start_codex_workbench.py --canonical-root PATH to select a verified read-only stage.")
+    receipt = Path(staged_root) / "data/unified_runs" / staged_run / "reports/index_build.json"
+    return load_staged(staged_root, staged_run, receipt.stat().st_mtime_ns)
+
+
 def get_retriever():
+    if staged_root:
+        return get_staged_runtime().retriever
     path = DATA / "passages.jsonl"
     index = DATA / "index/manifest.json"
     return load_retriever(path.stat().st_mtime_ns, index.stat().st_mtime_ns if index.exists() else 0)
@@ -58,24 +92,48 @@ with search_tab:
         mode = c.selectbox("Retrieval method", ["hybrid", "bm25", "dense"])
         temporal = st.checkbox("A: Use only sources available by the cutoff date", value=True)
         verify = st.checkbox("B: Check citation support (source preview checks verbatim quotes only)", value=False)
-        generation = st.selectbox("Answer mode", ["extractive", "llm"], format_func=lambda x: "Source excerpt preview · No model API required" if x == "extractive" else "Model-generated answer · Configured service required")
+        answer_modes = ["llm", "extractive"] if staged_root and provider == "codex" else ["extractive", "llm"]
+        generation = st.selectbox("Answer mode", answer_modes, format_func=lambda value:
+            "Source excerpt preview · No model call" if value == "extractive" else
+            "Codex-generated answer · No API key needed" if provider == "codex" else "DeepSeek-generated answer · Configured API required")
         submitted = st.form_submit_button("Search", type="primary")
     if submitted:
         try:
-            with st.spinner("Retrieving evidence…"):
-                st.session_state["query_result"] = query(question, mode=mode, as_of=cutoff.isoformat(),
-                    region=None if region == "All" else region, temporal=temporal, verify=verify,
-                    generation=generation, retriever=get_retriever())
+            with st.spinner("Retrieving evidence and preparing the answer…"):
+                if staged_root:
+                    if generation == "llm" and provider != "codex":
+                        raise ValueError("This read-only staged workbench uses Codex. DeepSeek requires the original workbench and its retained cost ledger.")
+                    st.session_state["query_result"] = query_codex(question, get_staged_runtime(), mode=mode,
+                        as_of=cutoff.isoformat(), region=None if region == "All" else region,
+                        temporal=temporal, verify=verify, generation="codex" if generation == "llm" else "extractive")
+                else:
+                    if generation == "llm" and provider == "codex":
+                        raise ValueError("Codex generation needs an explicit verified stage. Start scripts/start_codex_workbench.py with the canonical data root.")
+                    st.session_state["query_result"] = query(question, mode=mode, as_of=cutoff.isoformat(),
+                        region=None if region == "All" else region, temporal=temporal, verify=verify,
+                        generation=generation, retriever=get_retriever())
         except Exception as exc:
             st.error(str(exc))
     result = st.session_state.get("query_result")
     if result:
         st.caption(f"{result['retrieval_mode']} · {result['total_seconds']:.2f} seconds · {result['generation']}")
+        if result["generation"] == "codex":
+            st.caption(f"Retrieval and input verification: {result['retrieval_seconds']:.3f} s · Native generation: {result['generation_seconds']:.3f} s · Actual single-query end to end: {result['total_seconds']:.3f} s")
+            st.caption("Evidence sufficiency (machine): " + str(result.get("answerability")) + "; exact quotes and citations are checked, but this alone does not verify semantic faithfulness.")
+            with st.expander("Codex execution usage and audit records"):
+                st.json([dict(execution_id=call["execution_id"], observed_model=call["observed_model"],
+                              usage=call["usage"], generation_seconds=call["generation_seconds"],
+                              receipt_directory=call["artifact_directory"]) for call in result["model_calls"]])
         for limitation in result["limitations"]:
             st.info(limitation)
         for claim in result["claims"]:
             st.write(claim["text"])
             st.caption("Evidence: " + ", ".join(claim["citations"]))
+        if result.get("quotes"):
+            with st.expander("Exact source quotes supplied by Codex"):
+                for quote in result["quotes"]:
+                    st.write(quote["text"])
+                    st.caption(quote["passage_id"])
         for p in result["evidence"]:
             with st.expander(f"#{p['rank']} {p['title']} · p.{p['page']} · {p['available_by']}"):
                 st.write(p["text"])
@@ -83,7 +141,7 @@ with search_tab:
                 st.caption(f"{p['passage_id']} · Date precision: {p['date_precision']} · Score {p['score']:.4f}")
                 if p.get("parent_passage_id") or p.get("source_page_id"):
                     try:
-                        parent = original_parent(p)
+                        parent = get_staged_runtime().pages[p["source_page_id"]] if staged_root else original_parent(p)
                         is_page = bool(p.get("source_page_id"))
                         label = "Cleaned source page" if is_page else "Original parent passage"
                         context_id = parent["source_page_id"] if is_page else parent["passage_id"]
@@ -96,6 +154,8 @@ with search_tab:
         st.download_button("Export query JSON", json.dumps(result, ensure_ascii=False, indent=2), file_name="query.json", mime="application/json")
 
 with review_tab:
+    if staged_root:
+        st.info("Historical annotation archives stay in the original workbench. The new staged passages do not inherit old labels.")
     st.caption("Codex review results are machine annotations, not human reviews. The human review form below records a judgment only when you save it.")
     if annotation_rows != read_jsonl(DATA / "passages.jsonl"):
         st.info("Archived annotations: question-answer candidate pools and citations refer to the original frozen corpus; they are not automatically migrated to the current resegmented retrieval passages.")
@@ -321,6 +381,8 @@ with passage_tab:
             st.info("Batches are prepared, but no model labels have passed validation.")
 
 with status_tab:
+    if staged_root:
+        st.caption("Explicit staging mode; corpus release and default-library replacement have not occurred.")
     codex_report = DATA / "reports/codex_annotation.json"
     if codex_report.exists():
         st.subheader("Codex machine annotation progress")
@@ -328,5 +390,8 @@ with status_tab:
     report = DATA / "reports/corpus.json"
     if report.exists():
         st.json(json.loads(report.read_text(encoding="utf-8")))
-    st.json(agreement())
-    st.warning("Course approval is still required for model-assisted pre-annotation, solo completion, and human-agreement requirements. Zero human labels do not constitute a formal evaluation.")
+    if not staged_root:
+        st.json(agreement())
+    else:
+        st.caption("No human-annotation database is connected to this staged query runtime.")
+    st.warning("The student reports instructor approval for solo completion and machine annotation. Machine outputs are not human ground truth, and engineering checks alone are not formal evaluation results.")

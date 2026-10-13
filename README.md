@@ -14,7 +14,22 @@ A fresh clone can install the locked dependencies and run unit tests against fix
 
 The current uniform staging corpus has a local 384-dimensional index for 11,815 passages, but has not been published or selected as the default library. It still contains 1,562,715 words, with an 18.15% passage-count margin; the 160/65/240/480 segmentation parameters are unchanged. Byte-identical source reconstruction passed before and after indexing, with matching vector, corpus, passage-order and model hashes. Related tests passed 268 checks, and 24 real keyword, dense and hybrid retrieval runs passed cutoff-date, region and source-offset checks. These verify operation and integrity, not retrieval accuracy or release approval. The historical source-closeout full suite remains 1,171 passed with one host-permission skip. Fixed machine-review warnings and the historical 9,452-passage release rejection after hybrid support fell from 9/12 to 8/12 remain recorded. The default 10,079-passage library, labels and ledgers are unchanged; the workbench was not started for this task. See [uniform corpus implementation](docs/UNIFIED_CORPUS.md). `oil build --run RUN` creates a staging version without directly replacing the default library.
 
-Fifty new bilingual development questions are fixed: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. Authoring anchors are separate from independent annotation inputs. There are no new reference answers or relevance judgments (qrels), and retrieval has not been run for this batch. Question categories are not answer labels. Related tests passed 141 checks with one host-permission skip. See [development question preparation](docs/DEVELOPMENT_QUESTIONS.md) for the local inputs and usage restrictions.
+Fifty initial development questions are fixed: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They produced 150 real three-mode retrieval runs, 1,500 ranked hits and a blinded union of 973 question-evidence pairs. Both fresh Codex annotation streams and all 50 source-based adjudications are complete. Their machine-only development version is frozen and scored at depth 10: hybrid pooled recall 0.691 and nDCG 0.729, versus dense precision 0.470 and MRR 0.853. This is development evidence, not a completed held-out test. Authoring anchors remain separate from annotation inputs, and question categories are not answer labels. See [development question preparation](docs/DEVELOPMENT_QUESTIONS.md) and [the draft report](docs/FINAL_REPORT.md) for exact inputs, machine agreement and metric conventions.
+
+## Current subscription-backed workbench
+
+The user reports instructor approval for solo completion and machine annotation, and selected Codex instead of a hosted API for the new workflow. The English workbench defaults to Codex using the native CLI's existing ChatGPT login. It never reads authentication files or copies API keys. Fresh structured calls preserve original request/output bytes, exact-source checks, emitted token usage and execution receipts. An unknown runtime model identifier remains null; separate contexts do not prove model diversity or human agreement.
+
+The staging UI uses the verified 11,815-passage index explicitly, without replacing the historical default corpus. On the existing local Windows checkout, launch it with the project interpreter:
+
+```powershell
+$env:PYTHONPATH='D:/coursework/AI6127/oil-evidence-english/src'
+& 'D:/coursework/AI6127/oil-evidence/.venv/Scripts/python.exe' -X utf8 scripts/start_codex_workbench.py --canonical-root 'D:/coursework/AI6127/oil-evidence' --port 8518
+```
+
+This command is for the existing local data checkout, not a data-free clone. Keep the process running and visit [the staging workbench](http://127.0.0.1:8518). In-process Streamlit testing completed one actual Codex query: five evidence passages, two cited claims, 15.918344 seconds end to end. A background HTTP launch was blocked by the execution environment, so that diagnostic did not certify a running HTTP server. No paid external API was called; subscription dollar/credit cost is unknown, not zero.
+
+New machine-cohort freezing and scoring use separate scripts: `adjudicate_machine_annotations.py`, `freeze_machine_dataset.py` and `report_machine_retrieval.py`. They do not relax the legacy human-freeze path or count old passage-topic labels as QA records. Formal held-out scoring still requires 1,000 accepted test records. The new `run_codex_ablations.py` completed a five-case development diagnostic: A removes six future retrieved passages; B removes no claims, so no B benefit is established. Four saved generator executions plus three fresh support/judge calls are counted once. A five-query cited demonstration, checked draft report, editable 12-slide presentation and source/aggregate checkpoint packaging workflow exist locally; full evaluation and final submission are not certified complete.
 
 ## Windows startup
 
@@ -105,7 +120,7 @@ Those historical judgments were produced by Codex reading fixed evidence, withou
 
 Outputs are in `data/annotations/codex.jsonl`, immutable audit versions in `data/annotations/codex_runs/`, and statistics in `data/reports/codex_annotation.json`. `scripts/codex_labels.py` displays fixed reading material and validates/publishes decisions already written. It does not invoke Codex, produce semantic labels or convert subscription credits into API calls. Original `pilot.jsonl`, `candidates.jsonl` and human review history remain separate.
 
-The user selected DeepSeek V4.1 Flash (interface alias `deepseek-flash`) for all roles, with a cumulative USD 5 ceiling. Without a key in the local process, the application offers evidence-excerpt preview rather than presenting it as a synthesized answer or an answerability judgment.
+The historical API workflow used DeepSeek V4.1 Flash (interface alias `deepseek-flash`) for all roles, with a cumulative USD 5 ceiling. It remains optional and separate from the current subscription-backed Codex workflow. Without a configured API, the historical hosted path offers evidence-excerpt preview rather than presenting it as a synthesized answer or an answerability judgment.
 
 `config.toml` defines a `/chat/completions`-compatible endpoint, generation/verification role models, the spending ceiling and per-million input/output token rates. Separate requests to the same Flash model do not establish independent-model agreement. Remote endpoints must use HTTPS. Read keys only from `OIL_LLM_API_KEY`; do not put secrets in code or chat. `scripts/run_model_pilot.py` also accepts a non-echoing key that exists only for the current process.
 
@@ -146,7 +161,7 @@ Data uses JSON/JSONL. Model suggestions, web pages and PDFs are untrusted source
 
 Chinese-query performance of the English BGE model is unverified; formal questions use English. Retrieval hits are not answer-correctness judgments. Improvement B in excerpt-preview mode checks literal quotations only and does not establish semantic verification effectiveness.
 
-Formal experiments require frozen data, human labels and a configured model service under the original acceptance requirements. Smoke runs explicitly report `smoke_only=true`; quality metrics without reference labels are null. Reported retrieval recall covers judged candidates, not an exhaustive set of relevant documents across the corpus; always report `judged_fraction`. Develop on the development set and do not repeatedly tune using test results.
+The original human-freeze path still requires its original human labels and configured model service. The instructor-approved machine substitute uses a separate content-bound machine-only manifest, both retained original label streams, explicit adjudications, runtime snapshots and at least 1,000 accepted held-out records. Machine agreement is not human agreement. Smoke/development runs remain explicitly identified; quality metrics without reference labels are null. Reported retrieval recall covers judged candidates, not an exhaustive set of relevant documents across the corpus; always report `judged_fraction`. Develop on the development set and do not repeatedly tune using test results.
 
 ## Access and copyright
 
@@ -154,4 +169,4 @@ Honor robots.txt, per-host rate limits, failure records, document-size caps and 
 
 ## Outstanding acceptance requirements
 
-Code cannot create 1,000 human annotations, agreement between two independent human annotators or instructor approval for a solo/model-assisted workflow. Final formal experiments, the report, presentation and submission package depend on those inputs or an explicitly accepted alternative. Engineering checks are not assignment experiment conclusions.
+The student reports instructor approval for the solo/machine-only alternative; this is not independently verified correspondence. The machine dataset, full held-out experiments, final report, presentation and complete data/submission links still need completion. Group number, name and matriculation number remain intentionally blank. Engineering checks and packaging are not assignment experiment conclusions.

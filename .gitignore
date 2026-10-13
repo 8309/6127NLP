@@ -12,6 +12,7 @@ data/
 models/
 tmp/
 output/
+.chart-data-*/
 reports/*
 !reports/progress.json
 !reports/english_publication.json

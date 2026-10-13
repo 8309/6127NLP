@@ -90,3 +90,72 @@ def test_wrong_executable_or_stream_rejected_before_model_call(wrapper, tmp_path
         wrapper.run_stream(tmp_path, tmp_path)
     with pytest.raises(ValueError, match="stream"):
         wrapper.run_stream(tmp_path, tmp_path, "both")
+
+
+@pytest.fixture
+def historical_run(wrapper, tmp_path):
+    source = tmp_path / "v1"
+    row = dict(question_id="q-1", question="What operational oil throughput did the notice prove?",
+        as_of="2024-06-30", evidence=[dict(passage_id="p-1", document_id="d-1",
+            text="The notice announced restrictions on fourteen tankers.", available_by="2024-01-01")])
+    packet, stdin = wrapper.native.packet_and_prompt(row)
+    label = dict(answerability="insufficient", event_status="announced", qrels={"p-1": 1}, answer_points=[],
+        quotes=[dict(passage_id="p-1", text="announced restrictions on fourteen tankers")],
+        reasons=["A designation notice provides no observed operational throughput."])
+    raw = wrapper.native.protocol.canonical_bytes(label) + b"\r\n"
+    identity = dict(service="fixture", requested_model="fixture-default", observed_model=None, execution_id="old-context",
+                    observation_source="unavailable", identity_note="No execution identity exposed.")
+    envelope = wrapper.native.protocol.wrap_independent_output(packet, raw.decode("utf-8"), identity, "old-context", {},
+        usage=dict(input_tokens=10, output_tokens=5), execution_input_sha256=wrapper.native.protocol.sha256(stdin))
+    envelope["validation_errors"] = [wrapper.V1_CORRECTED_ERROR]
+    attempt = source / "a/q-1/attempt-one"
+    files = {"stdin.txt": stdin, "schema.json": wrapper.native.protocol.canonical_bytes(wrapper.native.output_schema(packet)),
+        "raw_final.json": raw, "stderr.txt": b"", "envelope.json": wrapper.native.protocol.canonical_bytes(envelope),
+        "events.jsonl": b"".join(wrapper.native.protocol.canonical_bytes(event) + b"\n" for event in
+            [dict(type="thread.started", thread_id="old-context"), dict(type="turn.completed", usage=dict(input_tokens=10, output_tokens=5))])}
+    for name, content in files.items():
+        wrapper.native.write_new(attempt / name, content)
+    receipt = dict(accepted=False, errors=[wrapper.V1_CORRECTED_ERROR], process_exit_code=0, stream="a", record_id="q-1",
+        subscription_usage=dict(input_tokens=10, output_tokens=5), artifacts_sha256={name: wrapper.native.protocol.sha256(raw) for name, raw in files.items()})
+    wrapper.native.write_new(attempt / "receipt.json", receipt)
+    wrapper.native.append_progress(source / "progress.jsonl", dict(type="completed", stream="a", accepted=False,
+        receipt="a/q-1/attempt-one/receipt.json", receipt_sha256=wrapper.native.protocol.sha256((attempt / "receipt.json").read_bytes())))
+    wrapper.native.write_new(source / "packets.json", {"q-1": packet})
+    wrapper.native.write_new(source / "protocol.txt", (wrapper.native.GUARD + "\n" + wrapper.native.protocol.ANNOTATION_PROMPT).encode("utf-8"))
+    wrapper.native.write_new(source / "protected_inputs.json", {})
+    wrapper.native.write_new(source / "manifest.json", dict(immutable_sha256={name: wrapper.native.protocol.sha256((source / name).read_bytes())
+        for name in ("packets.json", "protocol.txt", "protected_inputs.json")}))
+    return source, row, raw
+
+
+def test_lossless_revalidation_rescues_only_declared_v1_guard_without_model_call(wrapper, historical_run, tmp_path):
+    source, row, raw = historical_run
+    old_receipt = (source / "a/q-1/attempt-one/receipt.json").read_bytes()
+    attempts, protected, snapshots = wrapper.migration_inputs(source, "a", [row], {})
+    assert len(attempts) == 1 and snapshots == {}
+    output = tmp_path / "v2"
+    wrapper.migrate_outputs(output, "a", attempts, snapshots, source)
+    receipt = next((output / "a").glob("*/attempt-*/receipt.json"))
+    restored = wrapper.native.read_json(receipt)
+    assert restored["accepted"] is True and restored["new_model_calls"] == 0
+    assert restored["original_guard_verdict"] == [wrapper.V1_CORRECTED_ERROR]
+    envelope = wrapper.native.read_json(receipt.parent / "envelope.json")
+    assert envelope["identity"]["execution_id"] == "old-context"
+    assert envelope["raw_output"].encode("utf-8") == raw
+    assert (receipt.parent / "raw_final.json").read_bytes() == raw
+    assert (source / "a/q-1/attempt-one/receipt.json").read_bytes() == old_receipt
+    wrapper.native.protected_unchanged(protected)
+
+
+def test_changed_historical_raw_bytes_rejected_before_new_model_call(wrapper, historical_run):
+    source, row, _ = historical_run
+    (source / "a/q-1/attempt-one/raw_final.json").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="artifact changed"):
+        wrapper.migration_inputs(source, "a", [row], {})
+
+
+def test_changed_question_or_protocol_does_not_silently_migrate(wrapper, historical_run):
+    source, row, _ = historical_run
+    row["question"] = "A different question"
+    with pytest.raises(ValueError, match="packet digest changed"):
+        wrapper.migration_inputs(source, "a", [row], {})

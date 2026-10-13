@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from oil_evidence import machine_evaluation as protocol
+from adjudicate_machine_annotations import retain_decisions
 from report_machine_retrieval import NAMES
 
 
@@ -30,6 +31,11 @@ def assemble(source, adjudication_files, runtime_map, output_parent):
         raise ValueError("Supply unique retained adjudication files")
     artifacts = {key: (source / name).read_bytes() for key, name in NAMES.items() if key != "adjudications"}
     questions = protocol.parse_jsonl(artifacts["questions"])
+    packets = protocol.prepare_inputs(questions, protocol.parse_jsonl(artifacts["evidence_pool"]),
+                                      protocol.parse_jsonl(artifacts["corpus"]),
+                                      artifacts["annotation_prompt"].decode("utf-8"))
+    left, right = ({row["record_id"]: row for row in protocol.parse_jsonl(artifacts[key])}
+                   for key in ("independent_a", "independent_b"))
     expected = [row["record_id"] for row in questions]
     decisions, original_hashes = {}, {str(source / NAMES[key]): protocol.sha256(raw) for key, raw in artifacts.items()}
     for path in paths:
@@ -58,6 +64,9 @@ def assemble(source, adjudication_files, runtime_map, output_parent):
                     or final.get("reason") != review.get("reason")
                     or (decision.get("status") == "accepted" and final.get("label") != decision.get("label"))):
                 raise ValueError("Adjudication differs from its retained exact raw decision")
+            rebuilt = retain_decisions({identifier: final}, packets, left, right, [identifier], receipt)[0]
+            if protocol.canonical_bytes(rebuilt) != protocol.canonical_bytes(decision):
+                raise ValueError("Adjudication differs from its complete retained exact raw decision")
             original_hashes.update({str(raw_path): protocol.sha256(raw_output), str(receipt_path): protocol.sha256(receipt_path.read_bytes())})
             decisions[identifier] = decision
     if set(decisions) != set(expected):

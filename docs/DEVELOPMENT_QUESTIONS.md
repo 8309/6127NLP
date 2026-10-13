@@ -1,6 +1,6 @@
 # Oil Evidence development question preparation
 
-Fifty bilingual development questions are fixed for the next retrieval-debugging round: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. These categories describe design intent, not answerability labels. There are no reference answers, relevance judgments or human ground truth, and no formal test set has been frozen.
+Fifty bilingual development questions were fixed before retrieval: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. These categories describe design intent, not answerability labels. The original question snapshot contains no reference answers or qrels. Subsequent, separately versioned runs now contain real rankings and machine annotations; no human gold or formal test set is certified by the question-preparation receipt.
 
 ## Question list and inputs
 
@@ -27,7 +27,7 @@ The related test command exited 0: 141 passed and one Windows symlink-permission
 
 ## Next step
 
-Run the fixed questions through BM25, dense and hybrid retrieval, retaining complete rankings and one merged candidate evidence pool. Independently annotate under the agreed protocol, record disagreements before a separate adjudication pass, and preserve the original outputs. Without qrels, authoring-anchor hit rates must not be called accuracy or comprehensive recall. The eventual 200 development and 1,000 independent test records remain future targets; these 50 questions are an initial development subset.
+The fixed questions have produced 150 real BM25, dense and hybrid rankings at depth10, 1,500 ranked hits and a blinded union of 973 question-evidence pairs. Fresh Codex annotation streams and a separate source-based adjudication pass retain raw outputs, actual request hashes, context identities and usage under new run directories. Neither changes the original question snapshot. Complete the paired50, measure raw agreement before adjudication, and freeze/scoring under the distinct machine-only protocol. Authoring-anchor hit rates are not accuracy or comprehensive recall. The eventual200 development and1,000 held-out test records remain separate targets; these50 are an initial development subset.
 
 To verify existing local inputs and fixed artifacts in the matching canonical checkout, run:
 
@@ -35,4 +35,4 @@ To verify existing local inputs and fixed artifacts in the matching canonical ch
 .\.venv\Scripts\python.exe -X utf8 scripts/prepare_development_questions.py
 ```
 
-This command does not retrieve evidence, generate answers or annotations, invoke paid APIs, change the workbench library or push to GitHub. Codex subscription usage is unmeasured. Instructor confirmation of human-annotation and independent-human agreement requirements remains pending.
+This preparation command does not retrieve evidence, generate answers or annotations, invoke paid APIs, change the workbench library or push to GitHub. Subsequent native execution receipts record exposed token usage, but subscription credit/dollar cost remains unmeasured. The student reports instructor approval for the solo/machine alternative; model agreement must not be called independent-human agreement.

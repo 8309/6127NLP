@@ -1,6 +1,6 @@
 # Oil Evidence current progress
 
-As of 2026-10-12, source acquisition and uniform cleaning are closed out. The 11,815-passage staging corpus has a local index that passed integrity checks. The default knowledge base is unchanged; formal retrieval comparison and release remain pending. This repository publishes implementation and progress, not the complete local data.
+Source acquisition and uniform cleaning are closed out. The 11,815-passage staging corpus has a local index that passed integrity checks. The default knowledge base is unchanged. The initial 50-record machine-only DEVELOPMENT evaluation is complete; full held-out comparison and default-library release remain pending. This repository publishes implementation and progress, not the complete local data.
 
 This is the English publication edition. Historical private receipts verify the preserved canonical bilingual implementation, not the newly translated public code or interface. Exact historical replay requires the matching original implementation and the excluded raw-data snapshot. The English edition does not rebuild or certify a new corpus.
 
@@ -14,18 +14,23 @@ The publication checkout passed 1,415 fixture tests, with zero failures and thre
 - The same 66 fixed machine source-review cases and two additional diagnostics are preserved. Known critical defects were excluded and 34 warnings remain. This is not corpus-wide human review or human ground truth.
 - The default library remains at 10,079 passages. The original 4,500 machine paragraph labels, 100 QA records and 728 machine reviews retain their original versions. New passage IDs do not inherit labels.
 - The new index contains an 11,815 x 384 float32 matrix produced by the cached local English BGE model. Source reconstruction before and after indexing and vector/corpus/ID-order/model hashes passed. Related tests passed 268 checks, and 24 real retrieval runs passed date, region and source-offset checks. These do not establish retrieval accuracy or release-gate acceptance.
-- Fifty new bilingual development questions are fixed: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They use 37 other source documents, with authoring anchors separate from unlabelled query inputs. Related tests passed 141 checks with one host-permission skip. Design categories are not answer labels; retrieval and independent annotation have not been run on these 50 questions. See [development question preparation](DEVELOPMENT_QUESTIONS.md).
+- Fifty initial bilingual development questions are fixed: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They use 37 other source documents, with authoring anchors separate from annotator inputs. They produced 150 real rankings and 973 pooled query-evidence pairs. Both fresh-context Codex annotation streams and all 50 source-based machine adjudications are complete and separately frozen. Raw answerability/event agreement is 94.00%; evidence-grade agreement is 93.73%. Neither score is human agreement or accuracy. See [the draft report](FINAL_REPORT.md).
+- Actual development @5 metrics favor hybrid precision, pooled recall and nDCG (0.556, 0.469 and 0.678); dense MRR is 0.850 versus hybrid 0.849. At @10, dense has higher precision/MRR, while hybrid has higher pooled recall/nDCG. Recall is relative to the judged pool; one zero-positive pool is excluded from recall/nDCG. No held-out superiority is claimed.
+- A five-case development ablation completes four saved generation executions plus three fresh support/judge calls. A removes six future retrieved passages; B removes zero claims, so the automatic score ceilings do not demonstrate a B benefit. All failures and unknown usage are retained.
+- The Codex-default staging UI passes one actual in-process query, with five evidence passages and 15.918344 seconds end to end. Background HTTP launch was blocked and not bypassed. An editable 12-slide presentation and visually checked Q1-Q5 PDF draft exist locally, but no final submission is certified.
+- The latest full engineering-suite checkpoint passes 1,914 tests with zero failures and three documented skips in 283.64 seconds. Later code additions require their own verification; these tests are not RAG quality scores.
+- Exact question selection is now locked at 200 development and 1,000 TEST questions, with 18 unused reserves preserved. Their top-five, six-condition retrieval produces 7,200 rankings. Fresh paired annotations are still running; source-authored question counts do not establish accepted labels, a final dataset freeze or complete held-out experiments.
 
 [reports/progress.json](../reports/progress.json) contains aggregate results and hashes of the corresponding private local reports. See [UNIFIED_CORPUS.md](UNIFIED_CORPUS.md) for processing and failure records and [TASKS.md](../TASKS.md) for the full task list.
 
 ## Remaining tasks
 
-1. Run the fixed 50 development questions through keyword, dense and hybrid retrieval and create a shared candidate evidence pool.
-2. Independently annotate relevance and answers, compare retrieval quality, address defects and pass source/release gates before connecting the new library to the workbench.
-3. Prepare 200 development and 1,000 event-isolated test records, independently machine-annotate them, and preserve disagreements and usage records.
-4. Complete retrieval/answer evaluation, ablations of both improvements, performance measurements, the report and submission materials.
+1. Finish source-authored question selection for 200 development and 1,000 held-out records without changing source passages, weakening family reservations or padding with paraphrases.
+2. Retrieve identical blind evidence pools, complete both fresh machine annotation streams and source-based adjudication, and bind the actual formal runtime before the final machine-only freeze.
+3. Complete formal retrieval/answer evaluation, both improvement ablations, performance measurements and usage reporting on the frozen held-out cohort.
+4. Finalize the report, presentation and permitted data/code/results packages, validate submission links and preserve the exact submission snapshot.
 
-The earlier smaller uniform corpus's hybrid-support regression remains failure evidence; it does not establish whether the current candidate passes. Instructor confirmation is still needed for formal human annotation, independent-human agreement and solo completion requirements. Machine agreement is not human acceptance.
+The earlier smaller uniform corpus's hybrid-support regression remains failure evidence; it does not establish whether the current candidate passes. Instructor approval for solo completion and the machine-annotation substitute is user-reported. Cover identifiers stay blank by request. Machine agreement is not human agreement, and unknown native model identity does not establish model diversity. The 1,000 accepted test-record gate remains unchanged.
 
 ## Included and excluded materials
 

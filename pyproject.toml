@@ -12,6 +12,7 @@ dependencies = [
     "fastembed>=0.7,<0.9",
     "streamlit>=1.45,<2",
     "fonttools>=4,<5",
+    "jsonschema>=4.25,<5",
 ]
 
 [dependency-groups]

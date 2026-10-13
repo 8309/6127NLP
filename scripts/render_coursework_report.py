@@ -9,6 +9,7 @@ import argparse
 from html import escape
 import json
 from pathlib import Path
+import posixpath
 import re
 
 from reportlab.graphics.shapes import Drawing, Line, Rect, String
@@ -18,7 +19,7 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
-    Flowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    Flowable, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
 
@@ -41,7 +42,17 @@ def inline(text):
     text = escape(text.replace("\u2011", "-").replace("\u2013", "-").replace("\u2014", "-"))
     text = re.sub(r"`([^`]+)`", r'<font name="Courier">\1</font>', text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
-    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
+    def link(match):
+        label, target = match.groups()
+        if target.startswith(("https://", "http://")):
+            return f'<link href="{target}" color="#215a75">{label}</link>'
+        if not re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", target) and not target.startswith("/"):
+            relative = posixpath.normpath("docs/" + target)
+            if not relative.startswith("../"):
+                url = "https://github.com/8309/6127NLP/blob/main/" + relative
+                return f'<link href="{url}" color="#215a75">{label}</link>'
+        return label + " (" + target + ")"
+    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", link, text)
 
 
 def architecture():
@@ -143,7 +154,10 @@ def render(source, output, receipt=None):
             ("TOPPADDING", (0, 0), (-1, -1), 5),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
-        story.extend([table, Spacer(1, 9)])
+        # Short tables should not leave one isolated data row on the previous
+        # page. Larger tables keep repeatable headers and may split normally.
+        table_flowable = KeepTogether([table]) if table.wrap(WIDTH, A4[1])[1] <= A4[1] * .4 else table
+        story.extend([table_flowable, Spacer(1, 9)])
         table_rows.clear()
 
     for line in lines:

@@ -14,7 +14,7 @@ Status: DRAFT. Not ready for submission until the held-out evaluation, measured 
 
 Oil Evidence is a local retrieval augmented generation (RAG) workbench for questions about crude-oil supply, production policies, sanctions and transport disruptions. Its central requirement is to explain what the available evidence establishes at a specified cutoff date, rather than predict prices or provide investment advice. The system combines keyword and semantic retrieval, presents traceable evidence, and optionally generates cited claims with a second support-checking pass.
 
-The verified staging knowledge base contains 11,815 passages, 1,562,715 words and 28,582 unique word types from 1,527 contributing documents. A local 384-dimensional vector index and three retrieval modes passed operational checks. Fifty fixed development questions produced 150 actual retrieval runs and 1,500 ranked hits, merged into 973 question-evidence pairs for annotation. These results establish corpus size, provenance and functioning retrieval, not answer accuracy. The planned 200 development and 1,000 held-out machine-annotated question records, ranked retrieval metrics, answer-quality measurements and innovation ablations are not complete at this draft snapshot. Their result fields therefore remain unreported. [1][2][12]
+The verified staging knowledge base contains 11,815 passages, 1,562,715 words and 28,582 unique word types from 1,527 contributing documents. A local 384-dimensional index supports three retrieval modes. Fifty development questions produced 150 rankings and a 973-pair evidence pool, followed by 100 fresh-context machine labels and 50 accepted adjudications. Their frozen development scores favor hybrid retrieval for pooled recall and nDCG, while dense retrieval has slightly higher precision and MRR. A five-case answer experiment completed 30 variant answers. These small machine-derived results do not establish held-out accuracy. Source authoring has reached 205 development questions, but the planned 1,000 accepted test records and full held-out experiments remain incomplete. [1][2][12][18][19]
 
 The student reports instructor approval for individual completion and for machine annotation in place of manual labeling. Model outputs remain identified as machine annotations; model agreement will not be described as agreement between human annotators. Group number, name and matriculation number are intentionally blank until the student supplies them.
 
@@ -62,11 +62,11 @@ The 11,815-passage corpus is a verified staging candidate and has not replaced t
 
 The sparse baseline uses BM25 keyword retrieval over tokenized passage text. This provides inspectable matches for names, units and policy terms. The dense baseline uses the local English model `BAAI/bge-small-en-v1.5`. Passage and query vectors are normalized, and their dot product supplies cosine-similarity ranking. The verified index stores an 11,815 by 384 float32 matrix; model-file, corpus, vector and passage-order hashes guard against stale or mismatched indexes. [1][2]
 
-Hybrid retrieval combines the sparse and dense ranks using reciprocal rank fusion (RRF). Each candidate receives a contribution of `1 / (60 + rank)` from each ranking in which it appears. This avoids assuming that BM25 scores and cosine similarities share a comparable scale. The configured candidate pool is 50 per mode, and the default displayed result count is five. Eligibility filters are applied before final candidate ranking. This combination is motivated by complementary lexical and semantic matching; superiority has not yet been established by a ranked evaluation. [4]
+Hybrid retrieval combines the sparse and dense ranks using reciprocal rank fusion (RRF). Each candidate receives a contribution of `1 / (60 + rank)` from each ranking in which it appears. This avoids assuming that BM25 scores and cosine similarities share a comparable scale. The configured candidate pool is 50 per mode, and the default displayed result count is five. Eligibility filters are applied before final candidate ranking. The development evaluation below measures the lexical/semantic trade-off; it does not establish held-out superiority. [4][18]
 
 ### User interface and five demonstration questions
 
-The Streamlit interface provides query entry, cutoff and region controls, evidence cards, original-source links, machine-annotation review and passage-label inspection. Evidence cards expose identifiers, source dates and full text so that users can inspect claims rather than rely on a fluent answer alone. The application binds to localhost and is not an authenticated public service. [3]
+The Streamlit interface provides query entry, cutoff and region controls, evidence cards, original-source links, machine-annotation review and passage-label inspection. Evidence cards expose identifiers, source dates and full text so that users can inspect claims rather than rely on a fluent answer alone. The new staging interface defaults to subscription-backed Codex using its existing native ChatGPT login, with no API-key input. It reads the selected 11,815-passage index without changing the historical default library. The application binds to localhost and is not an authenticated public service. [3][17]
 
 Five fresh demonstration queries were run on the verified 11,815-passage staging corpus using hybrid retrieval at depth five. The following questions come from the public seeds; they are demonstration choices, not test-set ground truth. [5][16]
 
@@ -84,6 +84,8 @@ The first answer cites dated EIA production forecasts and explicitly says they a
 
 The new index also passed 24 earlier operational checks, and the English publication passed a synthetic four-tab interface smoke. Five older API examples on a 2,176-passage snapshot remain historical and are not substituted for the new demonstration. No separate verifier or quality judge ran in the new five-case batch. [1][3][6][16]
 
+A separate real in-process Streamlit query exercised all four tabs and the native Codex generation path: five passages, two claims and three exact quotes, with 0.225984 seconds for retrieval/input verification, 15.070134 seconds for native generation and 15.918344 seconds measured end to end. Its execution emitted 18,877 input and 504 output tokens; observed model identity was unavailable and remains null. The generator's sufficient label is not a gold judgment. A background HTTP launch was denied by the execution environment and was not bypassed; this check does not establish that an HTTP server is currently running. [17]
+
 ## Q3 Retrieval improvements and ranked evaluation
 
 ### Improvement A Temporal eligibility
@@ -94,11 +96,11 @@ This is an evidence-availability constraint, not a complete historical simulatio
 
 ### Development and test protocol
 
-Fifty fixed initial development questions are available: 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They use 37 source documents across nine source classes and reserve 27 provisional development event groups. Seventy-three authoring anchors are stored separately from annotation inputs, including eight future-leakage controls that are not positive evidence at their cutoffs. The categories describe question design, not answerability labels. No qrels have been assigned to this batch. [7]
+Fifty initial development questions contain 16 factual, 14 temporal, 10 comparison and 10 evidence-sufficiency challenges. They use 37 documents across nine source classes and reserve 27 provisional development event groups. Seventy-three authoring anchors stay separate from annotation inputs, including eight future-leakage controls. The categories describe design intent rather than gold labels. Subsequent blinded machine runs assigned pooled qrels and reference points without changing the original question snapshot. [7][18]
 
-All 50 questions have now been run in each retrieval mode at depth 10, producing 150 actual rankings and 1,500 returned hits. Their union contains 973 question-evidence pairs, with 13 to 27 distinct evidence passages per question and a mean of 19.46. Annotation inputs expose neither retrieval mode or rank nor authoring hints. Every returned hit has a known availability date no later than its cutoff; exact offsets and separate date/region controls passed. The stored inputs, rankings and annotation pool match their receipt hashes. This pool has no relevance labels yet and may omit relevant passages below the three top-10 lists. [12]
+All 50 questions ran in each retrieval mode at depth 10, producing 150 rankings and 1,500 returned hits. Their union contains 973 query-evidence pairs, with 13 to 27 passages per question and a mean of 19.46. Annotators saw no ranks, retrieval mode or authoring hints. Every returned hit has a known availability date no later than its cutoff. All original input, ranking and evidence hashes matched. The subsequently annotated pool can still omit relevant passages below the three top-10 lists. [12][18]
 
-The final design targets 200 development records and 1,000 held-out records, split by event group with related documents and legacy exposures excluded from the test partition. Retrieval parameters and prompts must be fixed using development data only. The completed 50-question pool is the initial development subset, not an independent test set or 973 QA records. Each question receives one shared evidence input for blinded annotation; authoring quotations are not an exhaustive relevance set. [8][12]
+The final design targets 200 development records and 1,000 held-out records, split by conservative event families with legacy documents and aliases excluded. Source authoring and admission have produced 205 development questions, including the original 50. This is question coverage, not 205 completed paired/adjudicated records. Test authoring uses source paragraphs unchanged, with no more than two admitted, meaningfully different questions per paragraph. A separate augmentation prompt shows only previous question strings from that same paragraph, never answers or qrels, to seek another genuine research task. It preserves family splits and records rejects rather than padding counts. Semantic uniqueness and event independence remain unverified. [8][12][20]
 
 ### Metrics and current results
 
@@ -110,6 +112,26 @@ Ranked evaluation will report Precision@5, pooled Recall@5, MRR@5, nDCG@5 and th
 | Dense | Not measured | Not measured | Not measured | Not measured | Not measured |
 | Hybrid | Not measured | Not measured | Not measured | Not measured | Not measured |
 
+The table above remains reserved for the full held-out evaluation. The complete 50-question DEVELOPMENT set is separately frozen as machine-only version `97dc75c680bee7fb2c3a9702`. Its measured development results are reported separately below. [18]
+
+For comparison at the interface's default depth five, the same frozen development labels and original rankings give the following separate development scores. These are not values for the still-unfinished held-out table. [18]
+
+| Development mode | Precision@5 | Pooled Recall@5 | MRR@5 | nDCG@5 | Judged fraction |
+|---|---:|---:|---:|---:|---:|
+| BM25 | 0.456 | 0.400 | 0.754 | 0.561 | 1.000 |
+| Dense | 0.532 | 0.428 | 0.850 | 0.645 | 1.000 |
+| Hybrid | 0.556 | 0.469 | 0.849 | 0.678 | 1.000 |
+
+Depth-10 development scores preserve the original evaluation depth:
+
+| Development mode | Precision@10 | Pooled Recall@10 | MRR@10 | nDCG@10 | Judged fraction |
+|---|---:|---:|---:|---:|---:|
+| BM25 | 0.388 | 0.606 | 0.762 | 0.601 | 1.000 |
+| Dense | 0.470 | 0.661 | 0.853 | 0.694 | 1.000 |
+| Hybrid | 0.468 | 0.691 | 0.849 | 0.729 | 1.000 |
+
+Precision and MRR cover 50 questions. Recall and nDCG cover 49 with positive pooled judgments, excluding one zero-positive pool rather than assigning it artificial recall. Hybrid's higher pooled recall/nDCG accompanies slightly lower precision/MRR than dense retrieval, so the results do not show uniform superiority. Query-paired bootstrap intervals accompany the saved metric artifact. All scores depend on machine-adjudicated relevance, not human gold. [18]
+
 An earlier segmentation candidate failed an unchanged 12-probe source-support comparison: BM25 improved from 4/12 to 6/12, while dense and hybrid each declined from 9/12 to 8/12. Its release gate rejected publication. This small exact-text diagnostic is not the table's formal ranked evaluation and does not establish the newer candidate's quality. The failure shows why increased passage count and successful indexing are insufficient reasons to release a corpus. [2]
 
 ## Q4 Evidence conditioned generation and quality assessment
@@ -118,7 +140,7 @@ An earlier segmentation candidate failed an unchanged 12-probe source-support co
 
 RAG is used instead of fine-tuning because the task depends on inspectable documents, changing report versions and user-selected information cutoffs. Retrieval supplies the evidence explicitly, allowing the answer to cite passage identifiers and expose limits. The query prompt separates crude oil from total liquids, forecasts from reported observations, stock changes from flow rates, and legal announcements from physical production outcomes. Source text is treated as untrusted data rather than executable instructions. [10]
 
-The generator returns an answerability decision, atomic claims with citations and limitations. A structural validator removes claims without valid evidence identifiers. If the eligible evidence is empty, the system states that no evidence was found. Without an API, the application offers an extractive preview: selected source sentences rather than a synthesized or verified answer. Extractive retrieval does not itself establish whether the question is answerable. [10]
+The generator returns an answerability decision, atomic claims with citations and limitations. The native Codex path also requires exact source quotations for cited claims and rejects structurally inconsistent responses; the historical API path removes invalidly cited claims. If eligible evidence is empty, the system states that no evidence was found. Extractive preview remains available without a generator: selected source sentences rather than a synthesized or verified answer. It does not itself establish whether the question is answerable. Evidence-insufficient output may quote eligible background but must not invent supported answer points. [10][17]
 
 ### Improvement B Claim support checking
 
@@ -126,9 +148,17 @@ Improvement B gives each generated claim and its cited passages to a separate ve
 
 ### Machine annotation and agreement
 
-The instructor-approved substitution is reported as machine annotation, based on the student's stated approval. The original brief's manual-labeling and human-agreement language remains recorded in the acceptance checklist. The student has replaced the planned Codex/DeepSeek pairing with an all-Codex workflow. Two separate blinded Codex executions will receive the same fixed evidence and annotation rules, without authoring answers, prior labels or each other's outputs. Actual requested and observed model identifiers must be recorded; an undisclosed model version cannot be invented. Agreement must be computed on the original outputs before a separate adjudication pass. Separate contexts may use the same model, so this measures agreement between blinded executions, not distinct-model diversity or independent-human agreement.
+The instructor-approved substitution is reported as machine annotation, based on the student's stated approval. The original brief's manual-labeling and human-agreement language remains recorded in the acceptance checklist. The student has replaced the planned Codex/DeepSeek pairing with an all-Codex workflow. Two separate blinded Codex executions receive the same fixed evidence and annotation rules, without authoring answers, prior labels or each other's outputs. Requested and observed model identifiers are recorded; an undisclosed model version is not invented. Agreement is computed on the original outputs before a separate adjudication pass. Separate contexts may use the same model, so this measures agreement between blinded executions, not distinct-model diversity or independent-human agreement.
 
-The archive contains 100 machine QA records and 4,500 original passage metadata labels, with 728 targeted machine reviews. These differ in unit, corpus version and selection conditions from the intended 1,000 held-out QA records and are not counted toward that held-out set. There are zero human labels in the recorded archive. Raw agreement, categorical Cohen's kappa and ordinal weighted kappa remain unmeasured for the new paired QA annotation. Model-scored fact alignment, if used, must be reported separately from categorical agreement. [3][8]
+The archive's 100 older QA records and 4,500 passage metadata labels are separate units and versions, not the new held-out set. The initial development experiment now has 50 outputs in each blinded stream, with no missing qrels or conflicting execution contexts. Before adjudication, answerability agrees 47/50 and event status 47/50. Evidence grades agree 912/973. Fifty subsequent source-based adjudications are accepted in the separate development version. Human-label coverage remains zero. [3][8][18]
+
+| Machine field | Raw agreement | Cohen's kappa | Quadratic weighted kappa |
+|---|---:|---:|---:|
+| Answerability | 94.00% | 0.881 | 0.952 |
+| Event status | 94.00% | 0.909 | Not applicable |
+| Evidence relevance | 93.73% | 0.883 | 0.937 |
+
+These are categorical agreement measures between fresh machine contexts. They are not human agreement, factual accuracy or distinct-model diversity. Native metadata did not expose either model identity. The manifest reports `same_requested_model_unverified`, retaining the unresolved default alias. Semantic agreement of free-text answers remains unmeasured rather than using literal wording equality. [18]
 
 ### Quality and performance measures
 
@@ -159,7 +189,18 @@ The ablation compares hybrid base, A only, B only and A plus B on the identical 
 | Hybrid B | Off | On | Not measured | Not measured | Not measured |
 | Hybrid A plus B | On | On | Not measured | Not measured | Not measured |
 
-No completed held-out ablation currently supports an improvement claim. The final report must include actual values, evaluation coverage and failure cases, even if an innovation reduces quality or provides no measurable benefit.
+No full held-out ablation currently supports an improvement claim. A separate, predetermined five-development-case pilot completed four generation batches and 30 evaluated variant answers. B reuses the exact base answer and A+B the exact A answer, avoiding a regeneration confound. Two fresh support-check batches and one machine-judge batch complete seven successful executions. A schema-interface repair reused the four saved generator responses after verifying exact original input/output bytes, not generating more favorable answers. [19]
+
+| Five-case variant | Automatic correctness | Automatic context precision | Future retrieved passages | Ineligible citations |
+|---|---:|---:|---:|---:|
+| Hybrid base | 1.000 | 0.440 | 6 | 0 |
+| Hybrid A | 1.000 | 0.600 | 0 | 0 |
+| Hybrid B | 1.000 | 0.440 | 6 | 0 |
+| Hybrid A+B | 1.000 | 0.600 | 0 | 0 |
+
+All automatic answer correctness, relevance and support scores reach a ceiling of 1.000 in this tiny sample. B removes zero claims, so it demonstrates the checking path but provides no measured B benefit. A removes six returned post-cutoff passages in these cases, while all variants already have zero ineligible claim citations. A zero future-evidence count does not establish broader correctness. The combined judge, references and generator may share errors and lack human calibration. [19]
+
+The seven successful executions emit 335,130 input and 11,606 output tokens. The recovery stage takes 128.772097 seconds, excluding the original generator execution time. Batched per-query generation and total latencies remain null, not a divided average. Failed schema and quota attempts remain archived with unknown usage where no usage event was emitted. Subscription dollar cost is unknown; the hosted API ledger did not change. [19]
 
 ## Validity limitations and failure analysis
 
@@ -171,7 +212,7 @@ Source coverage is uneven, OPEC access is restricted, and tables are conservativ
 
 ## Reproducibility and submission status
 
-Code, tests, locked dependencies, configuration and aggregate receipts are available in the [public repository](https://github.com/8309/6127NLP). The English publication edition passed 1,415 fixture tests with zero failures and three documented skips. Two skips involve Windows symlink-creation permission; the third requires excluded local PDFs, which passed a separate read-only sample check. These are engineering verification results, not RAG accuracy results. The canonical corpus's earlier source-closeout suite passed 1,171 tests with one permission skip, and index-related checks passed 268 tests. Those different suites and historical implementations must not be combined into one count. [1][6]
+Code, tests, locked dependencies, configuration and aggregate receipts are published in the [repository](https://github.com/8309/6127NLP); newer local additions still require publication. The current engineering-suite snapshot passes 1,869 tests with zero failures and three documented skips: two Windows symlink permissions and one excluded local PDF fixture. Later changes require their own verification. The original English publication's 1,415 tests, canonical source-closeout's 1,171 tests and index suite's 268 tests are different snapshots and must not be combined into a total. Engineering tests do not measure RAG accuracy. [1][6][21]
 
 Historical corpus receipts bind the canonical implementation, while the English publication has separate test receipts. Exact historical replay requires the matching local originals, caches, model and source snapshots; a clean clone with no data cannot reproduce the corpus simply by running fixture tests. The default library, old labels and ledgers remain separate from the unpublished staging version. [6][11]
 
@@ -195,5 +236,10 @@ The final submission must replace this draft with a checked PDF named for the gr
 14. [Treasury Sanctions International Network Smuggling Oil from Libya to Europe](https://home.treasury.gov/news/press-releases/sm0298/), source-registry publication date 2018-02-26.
 15. [DOE Announces Notice of Sale of Crude Oil from the Strategic Petroleum Reserve](https://www.energy.gov/articles/doe-announces-notice-sale-crude-oil-strategic-petroleum-reserve), source-registry publication date 2019-02-28.
 16. Retained local five-query demonstration: `data/machine_runs/coursework-demo/2026-10-13T00-37-20.834578+00-00-50342469/result.json`, SHA-256 `e06c5014238183549af92295d6e2167cd922be2db4371f506f4f123a82d6de5f`. [Execution implementation](../scripts/run_coursework_demo.py). The saved HTML, five traces and original batch response are local, not public data links.
+17. Retained local actual Streamlit query: `data/machine_runs/workbench_queries/2026-10-13T01-05-21.647873+00-00-56c414dd/ui-check.json`; query result SHA-256 `fae952014496c4c2b5cd02aa3dc74ce069635e8e1985d29b76f5a2bfffa23f26`. [Native runtime implementation](../src/oil_evidence/codex_runtime.py) and [read-only staging launcher](../scripts/start_codex_workbench.py).
+18. Local machine-only development version `data/machine_runs/frozen_development/97dc75c680bee7fb2c3a9702/manifest.json` and `retrieval-metrics-at10.json`. The separate depth-five derivative is `data/machine_runs/derived_retrieval/dev50-k5-126a7dfc7757/retrieval-metrics-at5.json`, SHA-256 `bd680be437ad9ad6633a92cf4aaa2f585379306d46fd5d0b1421e42d6bb9d10b`. [Ranked scoring](../scripts/report_machine_retrieval.py) and [machine metrics](../src/oil_evidence/machine_metrics.py). This contains 50 development records, not 1,000 test records or human gold. All original protocol, runtime and ranking input hashes are reverified; the old depth-10 artifact is unchanged.
+19. Local five-case ablation receipt: `data/machine_runs/ablations/2026-10-13T01-38-07.663209+00-00-94744afd/result.json`, SHA-256 `cecca5dd3cce5be5725bac3055563e257594094ae0de8886bd72cde3c76220c5`. [Native paired pilot](../scripts/run_codex_ablations.py). Four verified original generator batches plus three fresh support/judge calls, not seven newly generated batches.
+20. [Source-first cohort selection](../scripts/prepare_machine_cohort.py) and [actual admission aggregation](../scripts/aggregate_machine_questions.py). Local source/augmentation receipts preserve family reservations and rejected candidates, not proof of independently verified semantic uniqueness.
+21. Current suite receipt `tmp/assignment-current-tests.xml`: 1,869 passed, 3 skipped, 0 failures, 187.38 seconds. This ignored local JUnit artifact is not a public dataset or a later-code certification.
 
 The final source registry should supply the remaining exact official document URLs, archive hashes and redistribution decisions. The three document examples above do not provide a complete redistributable data package.
