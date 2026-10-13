@@ -4,6 +4,17 @@ Legend: [x] implemented/verified as noted; [ ] incomplete. No calendar schedule.
 
 This is the English publication edition. Historical verification receipts refer to the preserved canonical bilingual implementation and excluded local artifacts, not the translated public code or interface. Exact historical replay requires that matching implementation and raw snapshot. Translation does not rebuild the corpus, release the staged library or complete the coursework.
 
+## Assignment completion execution
+
+- [x] Record user-reported instructor permission for solo completion and machine annotation substitution (2026-10-12); keep cover identifiers blank. This supersedes earlier permission-pending notes, not machine provenance or the remaining measured deliverables.
+- [x] Adopt the user's current Codex-only annotation selection; do not wait for DeepSeek credentials, spend extra API funds or claim that two executions of one model establish different-model diversity.
+- [x] Run all 50 frozen development questions in BM25, dense and hybrid mode: 150 real offline retrievals, 1,500 ranked hits and 973 de-duplicated query-evidence pairs. Preserve ranks separately from the blinded evidence package; verify dates, source offsets and all 71 protected inputs plus 19 canonical core files.
+- [ ] Verify Codex CLI structured-output annotation with two fresh blinded executions on identical development evidence; retain raw outputs, prompt/input hashes, execution metadata, usage and failures.
+- [ ] Complete the 50-record annotation pilot, measure agreement and inspect disagreements before freezing the test protocol.
+- [ ] Prepare the remaining event-isolated QA questions and full 1,000-record test set without copying authoring answers into the annotator input or treating authoring anchors as complete relevance judgments.
+- [ ] Independently annotate and adjudicate the machine-only cohort, freeze a separate machine manifest, then execute retrieval evaluation and base/A/B/AB answer experiments.
+- [ ] Finalize the evidence-backed Q1-Q5 report, figures, presentation, permitted data/results archive, code archive and submission links. Leave identity fields blank as requested; do not submit to Blackboard automatically.
+
 ## English publication verification
 
 - [x] Translate all current Git-visible documentation, UI strings and example values to English while retaining archive-compatible schema keys. Keep the canonical local bilingual implementation, source data and frozen historical receipts unchanged.

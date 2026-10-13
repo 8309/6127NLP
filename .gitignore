@@ -11,6 +11,7 @@ htmlcov/
 data/
 models/
 tmp/
+output/
 reports/*
 !reports/progress.json
 !reports/english_publication.json

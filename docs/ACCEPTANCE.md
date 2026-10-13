@@ -17,14 +17,18 @@ Source of truth: ../Assignment(1).pdf in the course root (four pages, 2026). Thi
 
 Deadline: 7 November 2026 23:59 Singapore. Only first submission counts. Report weight 35%; local assessment_criteria.md separately lists presentation 30%. Late penalty: 5 percentage points per rounded-up day.
 
-## Outstanding course decisions
+## Course permission reported by the user
 
-The brief requires randomly assigned groups of 5–6. The user currently intends to implement alone. We must not represent an exemption as granted.
+On 2026-10-12, the user stated that the instructor has agreed to individual completion and replacement of manual annotation with machine annotation. This is a user-provided report of course permission, not independently verified written correspondence. No instructor message has been sent by this project. Group number, name and matriculation number are intentionally blank pending the user's final details.
 
-Ask the instructor: May this project be completed individually? Does model prelabelling followed by record-by-record human correction satisfy “manually labeling”? What independently double-annotated coverage and agreement definition are expected, and may a second person assist only in annotation?
+Proceed with the machine-only implementation under that reported permission. Preserve the original rubric above and label every machine output truthfully. Permission does not itself produce the required 1,000 QA records, measured agreement, experiment results or submission links; these must still be delivered. The exact agreement interpretation for two independent executions of one model is not specified by the reported permission and must not be presented as independent-human or distinct-model agreement.
 
-Do not send this question to anyone without explicit messaging authorization. Record the actual response here when provided. Engineering can proceed meanwhile; formal annotation compliance remains pending.
+Do not contact the instructor, submit on Blackboard, purchase credits or increase the API budget without explicit authorization. Keep the final cover fields blank until supplied.
 
 ## User-selected implementation deviation (2026-10-10)
 
 The user selected a machine-only evaluation workflow because manual annotation is not feasible: Codex Sol 6.1 and DeepSeek Flash 4.1 independently label the same QA records, followed by model-agreement measurement and separate adjudication. The user accepted describing this accurately as model annotation, not manual annotation. This is a planned implementation choice, not instructor approval or satisfaction of the original Q4 human-labeling requirement. Preserve the requirement above and disclose the deviation in the final report. The dependency-ordered work is in `TASKS.md`; no annotation was launched when recording this decision.
+
+## Current annotation selection
+
+On 2026-10-12 the user selected Codex alone for the new annotation runs instead of waiting for DeepSeek credentials. Use two fresh, blinded executions with identical evidence and rules, retain both raw outputs and compute agreement before adjudication. Repeated executions of the same model are not different-model diversity. Codex subscription usage is separate from API billing; record CLI usage when exposed and otherwise mark it unmeasured. Do not reuse credentials previously pasted into chat or convert subscription authentication into a third-party API key.

@@ -2,6 +2,8 @@
 
 ## Unit and roles
 
+Current selection (2026-10-12): the user requests Codex-only annotation and reports instructor permission for solo completion and machine annotation substitution. Use two fresh blinded Codex executions, then calculate same-model execution agreement before adjudication. Keep the earlier dual-provider plan below as historical context; it no longer defines the current annotation provider. Approval is reported by the user, not independently verified correspondence. See `ACCEPTANCE.md`.
+
 A record is a question with a cutoff date, an event group, reference answer points, evidence IDs, exact source quotes and graded relevance judgments. It is not a price-direction forecast label. Documents are read as untrusted evidence, not instructions.
 
 The initial implementation used DeepSeek V4.1 Flash (`deepseek-flash`) for candidate generation and a separate same-model verification call. Those existing outputs remain same-model checks. The user's 2026-10-10 plan selects Codex Sol 6.1 and DeepSeek Flash 4.1 for future independent evaluation annotation, as specified below; this documentation change does not switch runtime configuration or launch annotation.
