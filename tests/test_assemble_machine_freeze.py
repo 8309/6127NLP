@@ -8,6 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import assemble_machine_freeze as assembler
 import adjudicate_machine_annotations as adjudicator
+import compact_machine_adjudication as compact
 from test_machine_adjudication import scenario, raw_decision, receipt_for
 from oil_evidence import machine_evaluation as protocol
 
@@ -110,3 +111,45 @@ def test_repeated_input_files_are_not_silently_deduplicated(tmp_path):
     source, decision_path, runtime_map = fixture(tmp_path)
     with pytest.raises(ValueError, match="unique"):
         assembler.assemble(source, [decision_path, decision_path], runtime_map, tmp_path / "assembled")
+
+
+@pytest.mark.parametrize("basis", ["a", "b", "new", "none"])
+def test_compact_and_original_formats_have_exact_raw_source_binding(tmp_path, basis):
+    source, decision_path, runtime_map = fixture(tmp_path)
+    corpus = protocol.parse_jsonl((source / "corpus.jsonl").read_bytes())
+    packets = protocol.prepare_inputs(protocol.parse_jsonl((source / "questions.jsonl").read_bytes()),
+        protocol.parse_jsonl((source / "evidence_pool.jsonl").read_bytes()), corpus)
+    left, right = (adjudicator.read_stream(source / name) for name in ("independent_a.jsonl", "independent_b.jsonl"))
+    raw = dict(q1=dict(status="unresolved" if basis == "none" else "accepted", label_basis=basis,
+        new_label=left["q1"]["label"] if basis == "new" else None,
+        reason="Synthetic compact source review.",
+        unresolved_reasons=["Synthetic unresolved period."] if basis == "none" else []))
+    directory = decision_path.parent / "executions" / "compact"
+    receipt = receipt_for(directory, raw)
+    decisions = compact.retain_compact_decisions(raw, packets, left, right, ["q1"], receipt)
+    decision_path.write_bytes(protocol.canonical_bytes(decisions[0]) + b"\n")
+    output, result = assembler.assemble(source, [decision_path], runtime_map, tmp_path / "assembled")
+    rows = protocol.parse_jsonl((output / "adjudications.jsonl").read_bytes())
+    assert rows == decisions and result["records"] == 1
+    assert rows[0]["adjudication"]["raw_encoding"] == compact.VERSION
+    assert json.loads((Path(receipt["artifact_directory"]) / "raw_final.json").read_bytes()) == raw
+
+
+def test_unknown_adjudication_encoding_is_rejected_not_guessed(tmp_path):
+    source, decision_path, runtime_map = fixture(tmp_path)
+    value = protocol.parse_jsonl(decision_path.read_bytes())[0]
+    value["adjudication"]["raw_encoding"] = "unknown-synthetic-codec"
+    decision_path.write_bytes(protocol.canonical_bytes(value) + b"\n")
+    with pytest.raises(ValueError, match="Unknown raw adjudication"):
+        assembler.assemble(source, [decision_path], runtime_map, tmp_path / "assembled")
+
+
+def test_receipt_artifact_directory_cannot_redirect_retainer_reads(tmp_path):
+    source, decision_path, runtime_map = fixture(tmp_path)
+    decision = protocol.parse_jsonl(decision_path.read_bytes())[0]
+    receipt_path = Path(decision["adjudication"]["execution_receipt_path"])
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt["artifact_directory"] = str(tmp_path / "unrelated-host-directory")
+    receipt_path.write_bytes(protocol.canonical_bytes(receipt))
+    with pytest.raises(ValueError, match="artifact directory"):
+        assembler.assemble(source, [decision_path], runtime_map, tmp_path / "assembled")

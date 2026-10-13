@@ -319,7 +319,8 @@ def _extract_raw_label(raw, path):
 
 
 def wrap_independent_output(packet, raw_output, identity, context_id, decoding, usage=None,
-                            *, execution_input_sha256, raw_label_path=None, raw_record_id_path=None):
+                            *, execution_input_sha256, raw_label_path=None, raw_record_id_path=None,
+                            raw_codec=None):
     """Retain original output text and bind a parsed label to its exact location.
 
     For batching, raw_output is the ENTIRE original batch response and the path
@@ -335,7 +336,11 @@ def wrap_independent_output(packet, raw_output, identity, context_id, decoding, 
     if record_path is None and isinstance(path, list) and path and path[-1] == "label":
         record_path = path[:-1] + ["record_id"]
     try:
-        label = _extract_raw_label(raw_output, path)
+        if raw_codec is None:
+            label = _extract_raw_label(raw_output, path)
+        else:
+            from oil_evidence import wire_codec
+            label = wire_codec.decode_record(raw_output, raw_codec, packet["payload"])["label"]
     except (ValueError, TypeError):
         label = None
     output = dict(record_id=packet["payload"]["record_id"], input_sha256=packet["input_sha256"],
@@ -345,6 +350,11 @@ def wrap_independent_output(packet, raw_output, identity, context_id, decoding, 
                   decoding=dict(decoding), usage=usage, raw_output=raw_output,
                   raw_output_sha256=sha256(raw_output.encode("utf-8")), raw_label_path=path,
                   raw_record_id_path=record_path, label=label)
+    if raw_codec is not None:
+        # Optional registered transport normalization, never a replacement raw
+        # model response. The actual full wire request keeps its separate hash.
+        output.update(raw_codec=raw_codec, raw_encoding=wire_codec.VERSION,
+                      canonical_output_is_raw_model_output=False)
     output["validation_errors"] = validate_independent_output(output, packet)
     return output
 
@@ -383,12 +393,27 @@ def validate_independent_output(output, packet, complete=True):
         if output.get("raw_output_sha256") != sha256(raw.encode("utf-8")):
             errors.append("Original raw output hash mismatch")
         try:
-            parsed = _extract_raw_label(raw, output.get("raw_label_path", []))
+            codec = output.get("raw_codec")
+            if codec is not None:
+                from oil_evidence import wire_codec
+                decoded = wire_codec.decode_record(raw, codec, packet["payload"])
+                alias = decoded["record_alias"]
+                if (output.get("raw_encoding") != wire_codec.VERSION
+                        or output.get("canonical_output_is_raw_model_output") is not False
+                        or output.get("raw_label_path") != [alias, "label"]
+                        or output.get("raw_record_id_path") != [alias, "record_id"]):
+                    errors.append("Structural-ID normalization provenance/path differs")
+                parsed = decoded["label"]
+            else:
+                if output.get("raw_encoding") is not None:
+                    errors.append("Raw encoding requires a registered structural-ID mapping")
+                parsed = _extract_raw_label(raw, output.get("raw_label_path", []))
             if parsed != output.get("label"):
                 errors.append("Parsed label differs from retained raw output")
             if output.get("raw_label_path"):
                 record_path = output.get("raw_record_id_path")
-                if not record_path or _extract_raw_label(raw, record_path) != output.get("record_id"):
+                expected_record = decoded["record_alias"] if codec is not None else output.get("record_id")
+                if not record_path or _extract_raw_label(raw, record_path) != expected_record:
                     errors.append("Batch raw-output record ID must match the bound question")
         except (ValueError, TypeError):
             errors.append("Raw output is not a valid JSON label")

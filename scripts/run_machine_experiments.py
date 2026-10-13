@@ -22,6 +22,7 @@ from uuid import uuid4
 from jsonschema import Draft202012Validator
 
 import run_codex_ablations as pilot
+import prepare_answer_sample as sampling
 from report_machine_retrieval import NAMES
 from oil_evidence import machine_evaluation as protocol
 from oil_evidence.codex_runtime import (
@@ -32,14 +33,27 @@ from oil_evidence.machine_metrics import METRICS, paired_bootstrap, ranked_metri
 from oil_evidence.store import ROOT, now
 
 FORMAL_MINIMUM = 1000
-CONTRACT = "frozen-machine-six-variant-bounded-batches-v1"
+CONTRACT = "frozen-machine-1000-retrieval-100-answer-v4"
+FORMAL_JUDGE_PROMPT = pilot.JUDGE_PROMPT + """
+The payload contains shared_cases keyed by question ID and answers keyed by
+variant/question entry. Each shared case provides the complete fixed unranked
+reference_evidence pool, question, cutoff and machine reference. Each answer
+entry identifies its own record_id and ordered retrieved_ids within that pool.
+Use original source bodies to check both the answer AND reference; exact quotes
+alone do not prove semantic correctness. Never use another question's pool.
+For context_relevant, follow that answer's retrieved_ids order. For claim and
+citation support, follow its claims and citation order. Output the flat entry
+keys requested by the schema, not the shared case keys. Do not assume a reference
+is correct; explain conflicts with the source bodies in reasons.
+"""
 DEFINITIONS = (("bm25", "bm25:0", False), ("dense", "dense:0", False),
                ("hybrid_base", "hybrid:0", False), ("hybrid_A", "hybrid:1", True))
 CONDITIONS = {f"{mode}:{temporal}" for mode in ("bm25", "dense", "hybrid") for temporal in (0, 1)}
 SOURCE_PATHS = [Path(__file__), Path(pilot.__file__), ROOT / "src/oil_evidence/codex_runtime.py",
                 ROOT / "src/oil_evidence/machine_evaluation.py", ROOT / "src/oil_evidence/machine_metrics.py",
                 ROOT / "src/oil_evidence/retrieval.py", ROOT / "scripts/run_codex_annotation.py",
-                ROOT / "scripts/retrieve_machine_questions.py"]
+                ROOT / "scripts/retrieve_machine_questions.py", Path(sampling.__file__),
+                ROOT / "src/oil_evidence/wire_codec.py"]
 
 
 def read_json(path):
@@ -72,19 +86,82 @@ def long_path(path):
     return Path("\\\\?\\" + value) if os.name == "nt" else Path(value)
 
 
-def settings(requested_model=None, max_cases=8, max_request_bytes=160000):
+def validate_sample_plan(plan):
+    if (not isinstance(plan, dict) or plan.get("schema_version") != sampling.VERSION
+            or plan.get("original_test_count") != 1000 or plan.get("answer_sample_count") != 100
+            or plan.get("sample_seed") != 6127 or plan.get("retrieval_evaluation_count") != 1000
+            or plan.get("answer_variant_results") != 600 or plan.get("labels_answers_ranks_scores_used") is not False
+            or plan.get("selected_before_test_labels") is not True
+            or plan.get("selected_before_test_native_attempts") is not True):
+        raise ValueError("Bind the immutable pre-label uniform100-of1000 TEST sample")
+    draw, ordered = sampling.sample_ids(plan.get("original_ordered_test_record_ids", []))
+    if draw != plan.get("draw_order_record_ids") or ordered != plan.get("answer_record_ids"):
+        raise ValueError("Sample IDs/order do not reproduce the fixed uniform seed6127 draw")
+
+
+def load_sample_binding(directory, root):
+    directory, root = Path(directory).resolve(), Path(root).resolve()
+    allowed = root / "data/machine_runs/answer-samples"
+    if not directory.is_relative_to(allowed) or directory == allowed:
+        raise ValueError("Use a sealed canonical answer-sample run")
+    receipt = read_json(contained(directory, "receipt.json"))
+    if (receipt.get("status") != "immutable_uniform100_TEST_answer_sample_sealed_before_TEST_labels"
+            or receipt.get("original_inputs_unchanged") is not True or receipt.get("selected_questions") != 100
+            or receipt.get("population_test_questions") != 1000 or receipt.get("seed") != 6127
+            or receipt.get("labels_created") != 0 or receipt.get("scores_created") != 0
+            or receipt.get("implementation_sha256") != file_hash(Path(sampling.__file__))):
+        raise ValueError("Answer sample receipt or its original preparer implementation differs")
+    protected = {str(directory / "receipt.json"):file_hash(directory / "receipt.json")}
+    for original_name, expected in receipt.get("original_input_sha256", {}).items():
+        original = Path(original_name).resolve()
+        if not original.is_relative_to(root / "data") or not original.is_file():
+            raise ValueError("Original sampling binding escapes the canonical data")
+        protected[str(original)] = expected
+    _assert_hashes(protected)
+    for name, expected in receipt["artifact_sha256"].items():
+        path = contained(directory, name)
+        if file_hash(path) != expected:
+            raise ValueError("Sealed pre-label sampling artifact changed")
+        protected[str(path)] = expected
+    for name in ("sample_plan.json","sample_questions.jsonl","pre_label_status.json","pre_label_progress.jsonl"):
+        if str(directory / name) not in protected:
+            raise ValueError("Sample is missing its original questions or pre-label proof")
+    plan = read_json(directory / "sample_plan.json")
+    validate_sample_plan(plan)
+    if receipt["sample_plan_sha256"] != file_hash(directory / "sample_plan.json"):
+        raise ValueError("Original sample-plan hash changed")
+    proof = read_json(directory / "pre_label_status.json")
+    if (proof.get("accepted_test_labels_by_stream") != {"a":0,"b":0}
+            or proof.get("test_native_attempts_started") != 0
+            or file_hash(directory / "pre_label_status.json") != plan["pre_label_audit_sha256"]
+            or file_hash(directory / "pre_label_progress.jsonl") != plan["pre_label_progress_prefix_sha256"]
+            or proof["questions_sha256"] != plan["source_questions_sha256"]
+            or proof["test_questions_sha256"] != plan["source_test_questions_sha256"]):
+        raise ValueError("Original zero-TEST audit does not bind the chosen sample")
+    selected = protocol.parse_jsonl((directory / "sample_questions.jsonl").read_bytes())
+    if [row["record_id"] for row in selected] != plan["answer_record_ids"] or any(row.get("split") != "test" for row in selected):
+        raise ValueError("Sealed100 sampled questions/order differ")
+    return dict(directory=str(directory), sample_plan_sha256=file_hash(directory / "sample_plan.json"),
+        receipt_sha256=file_hash(directory / "receipt.json"), plan=plan), protected
+
+
+def settings(requested_model=None, max_cases=8, max_request_bytes=160000, sample_binding=None):
     if requested_model is not None and (not isinstance(requested_model, str) or not requested_model.strip()):
         raise ValueError("Requested model must be a nonempty name or explicit CLI-default null")
     if type(max_cases) is not int or not 1 <= max_cases <= 32:
         raise ValueError("Batch size must be between one and 32 complete cases")
     if type(max_request_bytes) is not int or not 8192 <= max_request_bytes <= 512000:
         raise ValueError("Full prompt plus schema UTF-8 byte ceiling must be 8192..512000")
+    if sample_binding is not None:
+        validate_sample_plan(sample_binding.get("plan"))
     return dict(contract=CONTRACT, provider="codex_chatgpt", requested_model=requested_model,
         observed_model_identity_required=False, observed_model_identity_may_be_unavailable=True,
         max_cases=max_cases, max_request_bytes=max_request_bytes, top_k=5,
         definitions=[list(row) for row in DEFINITIONS], variants=list(pilot.VARIANTS),
         derived_from={"hybrid_B":"hybrid_base", "hybrid_AB":"hybrid_A"},
         all_accepted_test_records=True, formal_minimum=FORMAL_MINIMUM,
+        retrieval_question_count=1000, answer_question_count=100,
+        answer_sample_binding=sample_binding,
         generator_reference_access=False, per_query_generation_latency_measured=False)
 
 
@@ -97,7 +174,7 @@ def runtime_values(runtime, cfg):
             config_sha256=protocol.sha256(config_bytes), config_utf8=config_bytes.decode("utf-8"))),
         generation_prompt=(ISOLATION_PROMPT + "\n" + pilot.GENERATION_PROMPT + "\nUNTRUSTED_PAYLOAD_JSON\n").encode(),
         verification_prompt=(ISOLATION_PROMPT + "\n" + pilot.VERIFICATION_PROMPT + "\nUNTRUSTED_PAYLOAD_JSON\n").encode(),
-        judge_prompt=(ISOLATION_PROMPT + "\n" + pilot.JUDGE_PROMPT + "\nUNTRUSTED_PAYLOAD_JSON\n").encode(),
+        judge_prompt=(ISOLATION_PROMPT + "\n" + FORMAL_JUDGE_PROMPT + "\nUNTRUSTED_PAYLOAD_JSON\n").encode(),
         implementation=protocol.canonical_bytes({name:dict(sha256=protocol.sha256(raw), source_utf8=raw.decode("utf-8"))
                                                  for name, raw in sources.items()}))
 
@@ -106,6 +183,8 @@ def snapshot(runtime, output, cfg):
     output = Path(output).resolve()
     if output.exists():
         raise ValueError("Never overwrite a runtime snapshot")
+    if cfg.get("answer_sample_binding") is None:
+        raise ValueError("Seal and bind the100-question pre-label sample before formal runtime snapshots")
     _assert_hashes(runtime.protected_sha256)
     values = runtime_values(runtime, cfg)
     paths = {}
@@ -155,7 +234,7 @@ def load_cohort(frozen, runtime):
     binding = json.loads(values["retrieval_config"], object_pairs_hook=protocol._unique_object,
                          parse_constant=protocol._invalid_constant)
     cfg = binding.get("experiment", {})
-    expected = settings(cfg.get("requested_model"), cfg.get("max_cases"), cfg.get("max_request_bytes"))
+    expected = settings(cfg.get("requested_model"), cfg.get("max_cases"), cfg.get("max_request_bytes"), cfg.get("answer_sample_binding"))
     if cfg != expected or runtime_values(runtime, cfg) != values:
         raise ValueError("Actual formal implementation, prompts, model configuration or index differs from freeze")
     rows = protocol.parse_jsonl(artifacts["questions"])
@@ -163,14 +242,24 @@ def load_cohort(frozen, runtime):
     packets = protocol.prepare_inputs(rows, pools, protocol.parse_jsonl(artifacts["corpus"]),
                                       artifacts["annotation_prompt"].decode("utf-8"))
     questions = {row["record_id"]:row for row in rows if row["split"] == "test"}
+    binding_sample = cfg.get("answer_sample_binding")
+    actual_sample, sample_protected = load_sample_binding(binding_sample["directory"], runtime.canonical_root)
+    if actual_sample != binding_sample or list(questions) != actual_sample["plan"]["original_ordered_test_record_ids"]:
+        raise ValueError("Frozen1000 TEST population or bound answer sample changed")
+    sample_rows = protocol.parse_jsonl((Path(binding_sample["directory"]) / "sample_questions.jsonl").read_bytes())
+    if any(row != questions.get(row["record_id"]) for row in sample_rows):
+        raise ValueError("Sampled question text/cutoff/group differs from the frozen population")
     references = {row["record_id"]:row for row in protocol.parse_jsonl(artifacts["adjudications"])
                   if row["record_id"] in questions}
     if len(questions) != manifest["split_status_counts"]["test"]["accepted"] or any(
             row["status"] != "accepted" for row in references.values()):
         raise ValueError("All frozen TEST records, not a convenient subset, must be accepted")
+    references = {qid:dict(row, reference_evidence=packets[qid]["payload"]["evidence"])
+                  for qid, row in references.items()}
     protected = {str(frozen / name):protocol.sha256(artifacts[key]) for key, name in NAMES.items()}
     protected.update({str(manifest_path):file_hash(manifest_path), str(paths_path):file_hash(paths_path)})
     protected.update({str(snapshot_paths[key]):hashes[key] for key in paths})
+    protected.update(sample_protected)
     source_hashes = {path.name:file_hash(path) for path in SOURCE_PATHS}
     protected.update({str(path):source_hashes[path.name] for path in SOURCE_PATHS})
     protected[str(ROOT / "config.toml")] = file_hash(ROOT / "config.toml")
@@ -179,6 +268,7 @@ def load_cohort(frozen, runtime):
 
 def load_rankings(directory, cohort, runtime):
     """Adopt complete, audited pre-freeze rankings without reranking or retiming."""
+    _assert_hashes(cohort.protected)
     directory = Path(directory).resolve()
     allowed = runtime.canonical_root.resolve() / "data/machine_runs/candidate-retrieval"
     if not directory.is_relative_to(allowed) or directory == allowed:
@@ -279,7 +369,23 @@ def stage_result(stage, cases, evidence, answers, rows, references, directory, c
     if stage in {"hybrid_B", "hybrid_AB"}:
         parsed, removed, _ = pilot.verify_batch(cases, answers, evidence, directory, caller)
         return dict(answers=parsed, removed_claims=removed)
-    parsed, _ = pilot.judge_batch(cases, rows, references, directory, caller)
+    def shared_judge(prompt, payload, schema, output, *, role):
+        shared, entries = {}, {}
+        for key, entry in payload.items():
+            qid = rows[key]["record_id"]
+            pool = references[qid].get("reference_evidence")
+            if not isinstance(pool, list):
+                raise ValueError("Formal judge needs original full pooled source bodies, not labels/quotes alone")
+            by_id = {p["passage_id"]:p for p in pool}
+            if any(h["passage_id"] not in by_id or any(h.get(field) != by_id[h["passage_id"]].get(field)
+                    for field in ("text","document_id","available_by")) for h in entry["evidence"]):
+                raise ValueError("Judge evidence must be original members of its own fixed pool")
+            shared[qid] = dict(question=entry["question"], as_of=entry["as_of"], reference=entry["reference"],
+                               reference_evidence=pool)
+            entries[key] = dict(record_id=qid, answer=entry["answer"],
+                                retrieved_ids=[p["passage_id"] for p in entry["evidence"]])
+        return caller(FORMAL_JUDGE_PROMPT, dict(shared_cases=shared, answers=entries), schema, output, role=role)
+    parsed, _ = pilot.judge_batch(cases, rows, references, directory, shared_judge)
     return dict(judgments=parsed)
 
 
@@ -499,6 +605,54 @@ def quality_summary(rows):
     return summary
 
 
+def full_retrieval_report(cohort, rankings):
+    """Score all1000 TEST questions in all six original ranking conditions."""
+    if len(cohort.questions) != 1000:
+        raise ValueError("The fixed retrieval evaluation needs every original1000 TEST question")
+    rows, summary = [], {}
+    for condition in sorted(CONDITIONS):
+        selected = []
+        for qid, question in cohort.questions.items():
+            evidence = rankings[qid]["conditions"][condition]
+            selected.append(dict(record_id=qid, condition=condition,
+                ranked_ids=[hit["passage_id"] for hit in evidence],
+                metrics=ranked_metrics([hit["passage_id"] for hit in evidence], cohort.references[qid]["label"]["qrels"], 5),
+                future_evidence_count=sum(not hit.get("available_by") or hit["available_by"] > question["as_of"] for hit in evidence),
+                per_query_retrieval_seconds=None))
+        values = dict(questions=len(selected), future_evidence_count=sum(row["future_evidence_count"] for row in selected))
+        for metric in METRICS:
+            defined = [row["metrics"][metric] for row in selected if row["metrics"][metric] is not None]
+            values[metric] = mean(defined) if defined else None
+            values[metric+"_defined_queries"] = len(defined)
+        summary[condition] = values
+        rows.extend(selected)
+    return dict(status="complete_machine_only1000_TEST_retrieval_evaluation", human_gold=False,
+        test_questions=1000, ranking_conditions=6, ranked_query_conditions=6000, k=5,
+        condition_meaning={key:dict(mode=key.split(":")[0], temporal=key.endswith(":1")) for key in CONDITIONS},
+        dataset_version=cohort.manifest["version"], summary=summary, per_query=rows,
+        limitations=["All1000 TEST questions are evaluated; the100-answer sample does not restrict retrieval coverage.",
+            "Relevance judgments are machine-adjudicated pooled judgments, not human gold or exhaustive corpus recall.",
+            "Original embeddings/scores were batched/reused; no fabricated individual retrieval latency is assigned."])
+
+
+def save_full_retrieval(run, cohort, rankings):
+    path = run / "retrieval_evaluation.json"
+    binding = protocol.sha256(protocol.canonical_bytes(dict(
+        all_test_ids=list(cohort.questions), references={qid:row["label"] for qid,row in cohort.references.items()},
+        rankings={qid:rankings[qid] for qid in cohort.questions}, runtime_sha256=cohort.manifest["runtime_sha256"])))
+    receipt_path = run / "retrieval_evaluation_receipt.json"
+    if path.exists():
+        receipt = read_json(contained(run,"retrieval_evaluation_receipt.json"))
+        if receipt["input_sha256"] != binding or receipt["result_sha256"] != file_hash(path):
+            raise ValueError("Completed full retrieval result/input binding changed")
+    else:
+        report = full_retrieval_report(cohort, rankings)
+        write_new(path, report)
+        write_new(receipt_path, dict(input_sha256=binding, result_sha256=file_hash(path),
+            completed_test_questions=1000, ranked_query_conditions=6000, human_gold=False, native_calls=0))
+    return dict(path=str(path), sha256=file_hash(path), test_questions=1000, ranked_query_conditions=6000)
+
+
 def usage_audit(run):
     """Count each native execution once, including rejected attempts when known."""
     unique, unknown = {}, []
@@ -549,7 +703,9 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
     cohort.protected.update(runtime.protected_sha256)
     cohort.protected.update(rank_protected)
     _assert_hashes(cohort.protected)
-    ids = list(cohort.questions)  # Frozen file order; all TEST records, no selector.
+    test_ids = list(cohort.questions)
+    sample = cohort.cfg["answer_sample_binding"]
+    ids = sample["plan"]["answer_record_ids"]  # Immutable pre-label random100; no result-based selector.
     parent = Path(output_parent).resolve()
     allowed = runtime.canonical_root.resolve() / "data/machine_runs/formal-experiments"
     if parent != allowed:
@@ -559,7 +715,9 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
         raise ValueError("Resume must name one formal experiment run")
     run = long_path(run)
     plan = dict(contract=CONTRACT, dataset_version=cohort.manifest["version"], formal_minimum=FORMAL_MINIMUM,
-        human_gold=False, all_test_record_ids=ids, questions=len(ids), expected_variant_answers=len(ids)*6,
+        human_gold=False, all_test_record_ids=test_ids, questions=len(test_ids), answer_record_ids=ids,
+        answer_questions=len(ids), answer_sample_plan_sha256=sample["sample_plan_sha256"],
+        expected_variant_answers=len(ids)*6,
         planned_base_generation_answers=len(ids)*4,
         unbatched_native_execution_upper_bound_without_retries=len(ids)*12,
         batching_reduces_invocations_not_evidence_or_question_coverage=True,
@@ -570,6 +728,7 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
             raise ValueError("Resume inputs, implementation, corpus or fixed model configuration changed")
     else:
         write_new(run / "plan.json", plan)
+    retrieval_result = save_full_retrieval(run, cohort, rankings)
     budget = ExecutionBudget(max_new_calls)
     status, error_text = "partial_not_complete", None
     all_rows = []
@@ -605,8 +764,10 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
                     answers[stage].update(checked["answers"])
                     removed[stage].update(checked["removed_claims"])
             rows = {}
-            for stage in pilot.VARIANTS:
-                for qid in group_ids:
+            # Adjacent variants of the same query share its source pool within
+            # a judge batch, instead of sending the same full pool six times.
+            for qid in group_ids:
+                for stage in pilot.VARIANTS:
                     hits, answer = evidence[stage][qid], answers[stage][qid]
                     by_id = {hit["passage_id"]:hit for hit in hits}
                     rows[stage + "__" + qid] = dict(record_id=qid, variant=stage, question=cases[qid]["question"],
@@ -646,7 +807,9 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
     usage = usage_audit(run)
     report = dict(status=status, formal_heldout_test=status == "completed_formal_machine_only_experiment",
         human_gold=False, dataset_version=cohort.manifest["version"], required_test_records=1000,
-        planned_test_questions=len(ids), completed_test_questions=len(all_rows)//6,
+        planned_test_questions=len(test_ids), completed_retrieval_questions=1000,
+        planned_answer_questions=len(ids), completed_answer_questions=len(all_rows)//6,
+        answer_sample_plan_sha256=sample["sample_plan_sha256"], retrieval_evaluation=retrieval_result,
         completed_variant_answers=len(all_rows), new_native_attempts_started=budget.started,
         current_segment_wall_seconds=perf_counter()-started, segment_wall_not_independent_query_latency=True,
         original_frozen_inputs_unchanged=True, error=error_text, usage=usage,
@@ -654,11 +817,13 @@ def experiment(runtime, frozen, retrieval_run, output_parent, *, resume=None, ma
             "Observed identity can be unavailable; fixed requested configuration does not establish model diversity or physical model identity.",
             "Evidence is top-five; recall is against the finite judged union, not all corpus relevance.",
             "No batch time divided into per-query latency; subscription consumption has no verified dollar conversion.",
+            "Answer quality covers a pre-label uniform100-of1000 TEST sample, not1000 generated answers per variant.",
+            "Paired bootstrap intervals resample100 sampled queries; finite-population, event-cluster and machine-label biases are not fully represented.",
             "The max-new-call bound limits attempts per continuation, not token consumption or prepaid dollar cost."])
     if status == "completed_formal_machine_only_experiment":
         expected = {(qid, variant) for qid in ids for variant in pilot.VARIANTS}
         if {(r["record_id"], r["variant"]) for r in all_rows} != expected or len(all_rows) != len(expected):
-            raise ValueError("Final formal coverage differs from all frozen TEST records")
+            raise ValueError("Final answer coverage differs from the fixed100 sampled TEST records")
         report["summary"] = quality_summary(all_rows)
         by_key = {(r["record_id"], r["variant"]):r for r in all_rows}
         report["paired_automatic_correctness"] = {right + "_minus_" + left:paired_bootstrap(
@@ -683,6 +848,8 @@ if __name__ == "__main__":
     prepare.add_argument("--requested-model")
     prepare.add_argument("--max-cases", type=int, default=8)
     prepare.add_argument("--max-request-bytes", type=int, default=160000)
+    prepare.add_argument("--answer-sample", type=Path, required=True,
+        help="Immutable uniform100 sample sealed before TEST labels/attempts")
     execute = commands.add_parser("run", help="Verify >=1000 accepted frozen TEST labels before any native call")
     execute.add_argument("--frozen-dir", required=True, type=Path)
     execute.add_argument("--retrieval-run", required=True, type=Path)
@@ -692,7 +859,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     runtime = load_staged_runtime(args.canonical_root, args.corpus_run)
     if args.command == "snapshot":
-        print(json.dumps(snapshot(runtime, args.output, settings(args.requested_model, args.max_cases, args.max_request_bytes)), indent=2))
+        sample, _ = load_sample_binding(args.answer_sample, runtime.canonical_root)
+        print(json.dumps(snapshot(runtime, args.output, settings(args.requested_model, args.max_cases, args.max_request_bytes, sample)), indent=2))
     else:
         output, result = experiment(runtime, args.frozen_dir, args.retrieval_run,
             runtime.canonical_root / "data/machine_runs/formal-experiments", resume=args.resume,

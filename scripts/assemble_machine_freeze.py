@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from oil_evidence import machine_evaluation as protocol
 from adjudicate_machine_annotations import retain_decisions
+import compact_machine_adjudication as compact
 from report_machine_retrieval import NAMES
 
 
@@ -53,6 +54,8 @@ def assemble(source, adjudication_files, runtime_map, output_parent):
                 raise ValueError("Adjudication raw execution does not belong to its original run")
             raw_output = raw_path.read_bytes()
             receipt = json.loads(receipt_path.read_bytes())
+            if Path(receipt.get("artifact_directory", "")).resolve() != raw_path.parent:
+                raise ValueError("Execution artifact directory differs from its retained local raw path")
             if (receipt.get("accepted") is not True
                     or protocol.sha256(raw_output) != review.get("raw_response_sha256")
                     or protocol.sha256(raw_output) != receipt["artifacts_sha256"].get("raw_final.json")):
@@ -61,10 +64,16 @@ def assemble(source, adjudication_files, runtime_map, output_parent):
                                 parse_constant=protocol._invalid_constant)
             final = parsed.get(identifier)
             if (not isinstance(final, dict) or final.get("status") != decision.get("raw_model_status")
-                    or final.get("reason") != review.get("reason")
-                    or (decision.get("status") == "accepted" and final.get("label") != decision.get("label"))):
+                    or final.get("reason") != review.get("reason")):
                 raise ValueError("Adjudication differs from its retained exact raw decision")
-            rebuilt = retain_decisions({identifier: final}, packets, left, right, [identifier], receipt)[0]
+            encoding = review.get("raw_encoding")
+            if encoding is None:
+                rebuilt = retain_decisions({identifier: final}, packets, left, right, [identifier], receipt)[0]
+            elif encoding == compact.VERSION:
+                rebuilt = compact.retain_compact_decisions(
+                    {identifier: final}, packets, left, right, [identifier], receipt)[0]
+            else:
+                raise ValueError("Unknown raw adjudication encoding cannot be interpreted")
             if protocol.canonical_bytes(rebuilt) != protocol.canonical_bytes(decision):
                 raise ValueError("Adjudication differs from its complete retained exact raw decision")
             original_hashes.update({str(raw_path): protocol.sha256(raw_output), str(receipt_path): protocol.sha256(receipt_path.read_bytes())})

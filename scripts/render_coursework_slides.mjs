@@ -53,6 +53,7 @@ const ui = await readSource('workbench_receipt');
 const uiResult = await readSource('workbench_result');
 const metrics = await readSource('retrieval_metrics', args['draft-only'] !== 'true');
 const ablation = await readSource('ablation_result', args['draft-only'] !== 'true');
+const answerSample = await readSource('answer_sample_plan');
 if (corpus.passages !== 11815 || agreement.paired_records !== 50 || retrieval.retrieval_runs !== 150
     || quality.exact_source_offsets !== true || ui.no_api_key_input !== true) {
   throw new Error('Source coverage differs from the requested draft');
@@ -62,6 +63,12 @@ if (metrics && (metrics.questions !== 50 || metrics.ranked_runs !== 150 || metri
 }
 if (ablation && (ablation.questions !== 5 || ablation.status !== 'completed_development_pilot_not_formal_heldout_experiment')) {
   throw new Error('Use the actual complete five-case pilot, never inferred experiment results');
+}
+if (answerSample.original_test_count !== 1000 || answerSample.answer_sample_count !== 100
+    || answerSample.sample_seed !== 6127 || answerSample.retrieval_evaluation_count !== 1000
+    || answerSample.answer_variant_results !== 600 || answerSample.labels_answers_ranks_scores_used !== false
+    || answerSample.selected_before_test_labels !== true || answerSample.selected_before_test_native_attempts !== true) {
+  throw new Error('Use the fixed pre-label uniform100-of1000 TEST answer sample');
 }
 await fs.mkdir(buildDir, {recursive: true});
 await fs.mkdir(path.dirname(finalPath), {recursive: true});
@@ -162,7 +169,8 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
     ['Dense', `${retrieval.embedding_model}\n${retrieval.index_dimension} dimensions`, 'Vector similarity'],
     ['Hybrid', 'BM25 and dense candidates', 'Reciprocal rank fusion']], 176, 305, [255, 540, 341], 28);
   text(slide, 'RRF score(d) = sum 1 / (60 + rank_m(d))', 72, 526, 1136, 65, 32, true);
-  text(slide, 'The union of three top-10 lists creates an unranked annotation pool.', 72, 605, 1136, 48, 26);
+  text(slide, 'Initial development pool: three top-10 lists, 50 questions.', 72, 592, 1136, 30, 24);
+  text(slide, 'Formal pool: six top-five lists, temporal filtering on/off.', 72, 628, 1136, 30, 24);
 }
 // 6. Innovation A.
 {
@@ -263,14 +271,21 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
 }
 // 12. Honest final coverage statement.
 {
-  const slide = page('Evaluation coverage and limitations', sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result'), 'Development draft');
-  paragraphs(slide, ['Completed: 50 development questions, 100 independent-context annotations and 150 retrieval runs.',
-    'The target of 1,000 formal held-out test records remains incomplete.',
-    'Model identity and human calibration remain unverified. Machine errors may be correlated.',
-    'The user reports instructor approval for solo work and model annotation.',
-    'Group, name and matriculation fields remain blank for the final cover.'], 184, 29);
+  const slide = page('Evaluation coverage and limitations',
+    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan'), 'Development draft');
+  paragraphs(slide, ['Completed development: 50 questions, 100 annotations and 150 retrieval runs.',
+    'Planned retrieval: all 1,000 fixed TEST questions across six ranking conditions.',
+    'Planned answers: 100 TEST questions drawn uniformly with seed 6127 before TEST labeling, across six variants (600 results).',
+    'Formal labels and results remain pending. The results shown here are development results.',
+    'Machine errors may correlate. Model identity and human calibration remain unverified.'], 184, 29);
   slide.speakerNotes.text += '\nApproval source: direct user statement in the task, not an independently inspected course document. '
-    + 'Machine agreement is not accuracy, and the development pilot is not a formal held-out result.';
+    + 'The user reports instructor approval for solo work and model annotation. '
+    + 'Group, name and matriculation fields remain blank for the final cover. '
+    + 'Machine agreement is not accuracy, and the development pilot is not a formal held-out result. '
+    + 'The answer_sample_plan source above fixes the original 1,000-question TEST population and the 100-question draw '
+    + 'before any TEST annotation or scoring. All 1,000 TEST labels must pass formal preflight. '
+    + 'Only the predetermined 100 questions enter answer generation and judging, with 600 planned variant results. '
+    + 'No formal result or measured gain follows from the sampling plan alone.';
 }
 if (presentation.slides.items.length !== 12) throw new Error('Expected exactly 12 slides including cover');
 const candidatePath = path.join(buildDir, 'candidate.pptx');

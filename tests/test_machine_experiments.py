@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
 import freeze_machine_dataset as freezer
 import run_machine_experiments as module
+from test_answer_sample import sampling_fixture
 from oil_evidence import machine_evaluation as protocol
 
 
@@ -33,6 +34,21 @@ def runtime(tmp_path):
 
 def cohort_fixture(tmp_path, records=1000, unresolved=False, max_cases=32):
     rt = runtime(tmp_path)
+    sample_root, sample_cohort, sample_status, sample_progress = sampling_fixture(tmp_path)
+    original_questions = module.protocol.parse_jsonl((sample_cohort / "questions.jsonl").read_bytes())[:200]
+    original_tests = [dict(record_id=f"fixture-q-{index:04}", question=f"What was synthetic crude output for case {index}?",
+        as_of="2024-01-01", split="test", event_group=f"fixture-event-{index}") for index in range(1000)]
+    for name, rows in (("questions.jsonl",original_questions+original_tests),("test_questions.jsonl",original_tests)):
+        (sample_cohort / name).write_bytes(b"".join(protocol.canonical_bytes(row)+b"\n" for row in rows))
+    receipt = module.read_json(sample_cohort / "receipt.json")
+    receipt["artifact_sha256"] = {name:module.file_hash(sample_cohort / name) for name in receipt["artifact_sha256"]}
+    (sample_cohort / "receipt.json").write_bytes(protocol.canonical_bytes(receipt))
+    status = module.read_json(sample_status)
+    status.update(questions_sha256=receipt["artifact_sha256"]["questions.jsonl"],
+                  test_questions_sha256=receipt["artifact_sha256"]["test_questions.jsonl"])
+    sample_status.write_bytes(protocol.canonical_bytes(status))
+    sample_dir, _ = module.sampling.prepare(sample_root,sample_cohort,sample_status,module.file_hash(sample_status),sample_progress)
+    sample_binding, _ = module.load_sample_binding(sample_dir, sample_root)
     source = tmp_path / "freeze-input"
     source.mkdir()
     corpus = [hit()]
@@ -62,7 +78,7 @@ def cohort_fixture(tmp_path, records=1000, unresolved=False, max_cases=32):
         raw = protocol.ANNOTATION_PROMPT.encode() if key == "annotation_prompt" else b"".join(
             protocol.canonical_bytes(row) + b"\n" for row in values[key])
         (source / name).write_bytes(raw)
-    snapshots = module.snapshot(rt, tmp_path / "runtime-snapshot", module.settings(max_cases=max_cases))
+    snapshots = module.snapshot(rt, tmp_path / "runtime-snapshot", module.settings(max_cases=max_cases, sample_binding=sample_binding))
     (source / "runtime_artifacts.json").write_bytes(protocol.canonical_bytes(snapshots))
     # The freezer requires snapshots staged inside its own source directory.
     paths = {}
@@ -74,7 +90,7 @@ def cohort_fixture(tmp_path, records=1000, unresolved=False, max_cases=32):
     (source / "runtime_artifacts.json").write_bytes(protocol.canonical_bytes(paths))
     frozen, _ = freezer.freeze(source, tmp_path / "frozen")
     retrieval = rt.canonical_root / "data/machine_runs/candidate-retrieval/fixture"
-    retrieval.mkdir(parents=True)
+    retrieval.mkdir(parents=True, exist_ok=True)
     conditions = {key:[dict(hit(), rank=1, score=1.0)] for key in module.CONDITIONS}
     rankings = [dict(record_id=q["record_id"], ranking_seconds_excluding_embedding=.1, conditions=conditions) for q in questions]
     payloads = [packets[q["record_id"]]["payload"] for q in questions]
@@ -113,11 +129,13 @@ def synthetic_caller(*, fail_first=False, unknown_usage=False, malformed_first=F
         elif role == "verifier":
             value = {qid:dict(supported_indices=[], reasons=["Synthetic removal."]) for qid in payload}
         else:
+            assert "shared_cases" in payload and "answers" in payload
             value = {key:dict(correctness=1, relevance=2,
                 claim_supported=[True]*len(case["answer"]["claims"]),
                 citation_supported=[True]*sum(len(c["citations"]) for c in case["answer"]["claims"]),
-                context_relevant=[True]*len(case["evidence"]), insufficiency_handling=False,
-                reasons=["Synthetic judge, no accuracy evidence."]) for key, case in payload.items()}
+                context_relevant=[True]*len(case["retrieved_ids"]), insufficiency_handling=False,
+                reasons=["Synthetic judge, no accuracy evidence."]) for key, case in payload["answers"].items()}
+            assert all(case["reference_evidence"] and "reference" in case for case in payload["shared_cases"].values())
         raw, framed = protocol.canonical_bytes(value), module.request_bytes(dict(prompt=prompt, payload=payload))
         usage = None if unknown_usage else dict(input_tokens=10, output_tokens=2)
         events = [dict(type="thread.started", thread_id=identity), dict(type="turn.started"),
@@ -152,9 +170,19 @@ def test_actual_formal_runtime_six_bindings_and_prior_pilot_implementation_rejec
     assert len(cohort.questions) == 1000 and set(cohort.manifest["runtime_sha256"]) == protocol.RUNTIME_KEYS
     source = json.loads(module.runtime_values(rt, cohort.cfg)["implementation"])
     assert "run_machine_experiments.py" in source and "run_codex_ablations.py" in source
+    assert "wire_codec.py" in source and "prepare_answer_sample.py" in source
     (rt.stage / "index/manifest.json").write_text('{"changed":true}')
     with pytest.raises(ValueError, match="differs from freeze"):
         module.load_cohort(frozen, rt)
+
+
+def test_optional_wire_codec_source_bytes_are_bound_even_when_not_used(tmp_path):
+    rt = runtime(tmp_path)
+    sources = json.loads(module.runtime_values(rt, module.settings())["implementation"])
+    codec = module.ROOT / "src/oil_evidence/wire_codec.py"
+    assert sources[codec.name]["sha256"] == module.file_hash(codec)
+    assert sources[codec.name]["source_utf8"] == codec.read_bytes().decode("utf-8")
+    assert module.CONTRACT.endswith("-v4")
 
 
 def test_greedy_bound_never_truncates_complete_evidence_and_rejects_oversized_singleton():
@@ -180,31 +208,34 @@ def test_original_pool_binding_and_full_retrieval_coverage_required(tmp_path):
         module.load_rankings(retrieval, cohort, rt)
 
 
-@pytest.mark.parametrize("extra_split", ["development", "test"])
-def test_only_original_certified_extra_development_can_be_outside_frozen_cohort(tmp_path, extra_split):
+@pytest.mark.parametrize("unknown_extra", [False,True])
+def test_only_original_certified_extra_development_can_be_outside_frozen_cohort(tmp_path, unknown_extra):
     rt, frozen, retrieval = cohort_fixture(tmp_path)
     cohort = module.load_cohort(frozen, rt)
-    extra = dict(record_id="fixture-extra", question="What is the extra synthetic output case?", as_of="2024-01-01",
-                 split=extra_split, event_group="fixture-extra-event")
-    source = rt.canonical_root / "data/machine_runs/question-cohorts/fixture"
-    source.mkdir(parents=True)
-    originals = list(cohort.questions.values()) + [extra]
-    (source / "questions.jsonl").write_bytes(b"".join(protocol.canonical_bytes(q)+b"\n" for q in originals))
+    source = Path(cohort.cfg["answer_sample_binding"]["plan"]["source_cohort"])
+    originals = protocol.parse_jsonl((source / "questions.jsonl").read_bytes())
+    extra_dev = [row for row in originals if row["split"] == "development"]
     inputs = module.read_json(retrieval / "inputs.json")
     inputs.update(cohort=str(source), protected_sha256={str(source / "questions.jsonl"):module.file_hash(source / "questions.jsonl")})
     (retrieval / "inputs.json").write_bytes(protocol.canonical_bytes(inputs))
     ranks = protocol.parse_jsonl((retrieval / "rankings.jsonl").read_bytes())
-    ranks.append(dict(record_id=extra["record_id"], conditions=ranks[0]["conditions"], ranking_seconds_excluding_embedding=.1))
+    ranks.extend(dict(record_id=extra["record_id"], conditions=ranks[0]["conditions"], ranking_seconds_excluding_embedding=.1)
+                 for extra in extra_dev)
+    if unknown_extra:
+        ranks[-1]["record_id"] = "unknown-extra-test"
     (retrieval / "rankings.jsonl").write_bytes(b"".join(protocol.canonical_bytes(row)+b"\n" for row in ranks))
     pools = protocol.parse_jsonl((retrieval / "annotation_pool.jsonl").read_bytes())
-    pools.append(dict(record_id=extra["record_id"], question=extra["question"], as_of=extra["as_of"], evidence=pools[0]["evidence"]))
+    pools.extend(dict(record_id=extra["record_id"], question=extra["question"], as_of=extra["as_of"], evidence=pools[0]["evidence"])
+                 for extra in extra_dev)
+    if unknown_extra:
+        pools[-1]["record_id"] = "unknown-extra-test"
     (retrieval / "annotation_pool.jsonl").write_bytes(b"".join(protocol.canonical_bytes(row)+b"\n" for row in pools))
     receipt = module.read_json(retrieval / "receipt.json")
     receipt["artifact_sha256"] = {name:module.file_hash(retrieval / name) for name in receipt["artifact_sha256"]}
     (retrieval / "receipt.json").write_bytes(protocol.canonical_bytes(receipt))
-    if extra_split == "development":
+    if not unknown_extra:
         _, _, timing = module.load_rankings(retrieval, cohort, rt)
-        assert timing["certified_extra_development_records_not_experiment_test"] == 1
+        assert timing["certified_extra_development_records_not_experiment_test"] == 200
     else:
         with pytest.raises(ValueError, match="extra DEVELOPMENT"):
             module.load_rankings(retrieval, cohort, rt)
@@ -216,7 +247,8 @@ def test_bounded_partial_resume_reuses_raw_answers_and_counts_usage_once(tmp_pat
     parent = rt.canonical_root / "data/machine_runs/formal-experiments"
     run, first = module.experiment(rt, frozen, retrieval, parent, max_new_calls=2, caller=caller)
     assert first["status"] == "partial_new_attempt_limit_reached" and len(calls) == 2
-    assert first["formal_heldout_test"] is False and first["completed_test_questions"] == 0
+    assert first["formal_heldout_test"] is False and first["completed_answer_questions"] == 0
+    assert first["completed_retrieval_questions"] == 1000
     completed = list((run / "jobs").glob("*/completed.json"))
     # Simulate a crash after native acceptance but before derived completion.
     completed[0].unlink()
@@ -230,7 +262,8 @@ def test_bounded_partial_resume_reuses_raw_answers_and_counts_usage_once(tmp_pat
         assert all(answer["claims"] == [] and answer["answerability"] == "insufficient" for answer in checked["answers"].values())
     assert not (run / "result.json").exists()
     plan = module.read_json(run / "plan.json")
-    assert len(plan["all_test_record_ids"]) == 1000 and plan["expected_variant_answers"] == 6000
+    assert len(plan["all_test_record_ids"]) == 1000 and len(plan["answer_record_ids"]) == 100
+    assert plan["expected_variant_answers"] == 600
 
 
 def test_failure_retained_no_automatic_retry_and_unknown_execution_not_zero(tmp_path):
@@ -283,26 +316,30 @@ def test_mechanical_rejection_explicit_retry_keeps_original_not_quality_cherry_p
     assert retried["usage"]["known_native_token_totals"] == dict(input_tokens=20, output_tokens=4)
 
 
-def test_mocked_full_1000_completion_covers_every_test_id_and_all_six_variants(tmp_path):
+def test_mocked_1000_retrieval_100_answer_completion_covers_all_fixed_denominators(tmp_path):
     rt, frozen, retrieval = cohort_fixture(tmp_path)
     caller, calls = synthetic_caller()
     parent = rt.canonical_root / "data/machine_runs/formal-experiments"
     run, complete = module.experiment(rt, frozen, retrieval, parent, max_new_calls=1000, caller=caller)
     assert complete["status"] == "completed_formal_machine_only_experiment"
     assert complete["formal_heldout_test"] is True and complete["human_gold"] is False
-    assert complete["completed_test_questions"] == 1000 and complete["completed_variant_answers"] == 6000
+    assert complete["completed_retrieval_questions"] == 1000
+    assert complete["completed_answer_questions"] == 100 and complete["completed_variant_answers"] == 600
     assert complete["usage"]["known_native_token_totals"] == dict(input_tokens=10*len(calls), output_tokens=2*len(calls))
-    assert complete["summary"]["hybrid_base"]["automatic_claim_faithfulness_denominator"] == 1000
+    assert complete["summary"]["hybrid_base"]["automatic_claim_faithfulness_denominator"] == 100
     assert complete["summary"]["hybrid_B"]["automatic_claim_faithfulness"] is None
-    assert complete["summary"]["hybrid_B"]["claims_removed"] == 1000
+    assert complete["summary"]["hybrid_B"]["claims_removed"] == 100
     group_rows = [row for p in (run / "groups").glob("*.json") for row in module.read_json(p)["rows"]]
-    assert len({(r["record_id"],r["variant"]) for r in group_rows}) == 6000
+    assert len({(r["record_id"],r["variant"]) for r in group_rows}) == 600
     assert all(r["per_query_generation_seconds"] is None and r["per_query_total_seconds"] is None
                and r["per_query_retrieval_seconds"] is None for r in group_rows)
-    assert len([role for role, _, _ in calls if role == "generator"]) == 4*32
+    assert len([role for role, _, _ in calls if role == "generator"]) == 4*4
+    retrieval_report = module.read_json(run / "retrieval_evaluation.json")
+    assert retrieval_report["test_questions"] == 1000 and retrieval_report["ranked_query_conditions"] == 6000
+    assert all(value["questions"] == 1000 for value in retrieval_report["summary"].values())
     before = {p:module.file_hash(p) for p in run.rglob("*") if p.is_file()}
     _, resumed = module.experiment(rt, frozen, retrieval, parent, resume=run, max_new_calls=0, caller=caller)
-    assert resumed["completed_test_questions"] == 1000 and resumed["new_native_attempts_started"] == 0
+    assert resumed["completed_answer_questions"] == 100 and resumed["new_native_attempts_started"] == 0
     assert all(module.file_hash(p) == digest for p, digest in before.items())
 
 
@@ -319,3 +356,19 @@ def test_quality_abstention_and_support_denominators_are_explicit():
     assert summary["hybrid_AB"]["categorical_false_abstention_rate"] is None
     assert summary["hybrid_AB"]["automatic_claim_faithfulness"] is None
     assert summary["hybrid_AB"]["automatic_claim_faithfulness_denominator"] == 0
+
+
+def test_judge_shared_source_pool_is_complete_and_not_repeated_per_variant():
+    cases = {"fixture-q":dict(question="Synthetic output?", as_of="2024-01-01")}
+    original = hit()
+    reference = dict(label={}, reference_evidence=[original])
+    raw_answer = dict(answerability="insufficient", claims=[], quotes=[], limitations=["Synthetic gap."])
+    rows = {variant+"__fixture-q":dict(record_id="fixture-q", answer=raw_answer, evidence=[original])
+            for variant in module.pilot.VARIANTS}
+    request, _ = module.capture_request("judge", cases, rows=rows, references={"fixture-q":reference})
+    assert len(request["payload"]["shared_cases"]) == 1
+    assert len(request["payload"]["answers"]) == 6
+    assert request["payload"]["shared_cases"]["fixture-q"]["reference_evidence"] == [original]
+    assert request["prompt"] == module.FORMAL_JUDGE_PROMPT
+    assert all(entry["retrieved_ids"] == ["fixture-p"] and "reference" not in entry
+               for entry in request["payload"]["answers"].values())

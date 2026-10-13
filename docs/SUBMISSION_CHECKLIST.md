@@ -31,7 +31,7 @@ The extracted brief records a deadline of 7 November 2026 at 23:59 Singapore tim
 | Machine agreement | 94.00% answerability/event; 93.73% evidence grades over 973 pairs, measured before adjudication | [Report](FINAL_REPORT.md); not human agreement |
 | Real query UI diagnostic | Four-tab in-process query; five passages, two claims, 15.918344 s end to end | [Report](FINAL_REPORT.md); not proof of running HTTP service |
 | Development ablation | Five fixed cases, four original generator plus three fresh support/judge executions | [Report](FINAL_REPORT.md); not held-out accuracy |
-| Current local fixture suite | 1,914 passed, zero failures, three documented skips, 283.64 s | Local checkpoint JUnit; later additions require separate verification |
+| Sampled-scope local fixture suite | 2,046 passed, zero failures, three documented skips, 306.24 s | Local checkpoint JUnit; later wire-driver/historical-pipeline additions have separate checks |
 | Exact final question selection | 200 development, 1,000 TEST, 18 unused reserves; 7,200 six-condition rankings | Locked local source-first selection; fresh paired labels pending |
 | Existing machine archives | 100 QA records, 4,500 legacy paragraph labels and 728 targeted reviews | [Implementation record](IMPLEMENTATION_REPORT.md) |
 | Held-out evaluation | Not frozen or evaluated | [Annotation protocol](ANNOTATION.md) |
@@ -50,7 +50,7 @@ The staged corpus has not been released as the default library. The existing 10,
 - [ ] Freeze a distinct machine-only evaluation version without altering the human-only freezing gate or old archives.
 - [x] Complete the separate initial 50-record development freeze and depth-10 scoring; do not use it to satisfy the 1,000-record held-out gate.
 - [ ] Report BM25, dense and hybrid Precision@5, pooled Recall@5, MRR@5, nDCG@5 and judged fraction.
-- [ ] Run base, A, B and A plus B under identical frozen test settings; retain all outputs and failures.
+- [ ] Run six answer variants, including base, A, B and A plus B, on the same pre-fixed 100-question TEST sample; retain all outputs and failures. Retrieval metrics still cover all 1,000 accepted TEST questions.
 - [x] Complete the five-case development ablation: six future passages removed by A, zero claims removed by B, automatic quality ceilings explicitly disclosed.
 - [ ] Report answer quality, citation support, time errors and insufficiency handling with evaluator provenance.
 - [x] Measure warm sequential retrieval median and p95 on the initial 50 questions in all three modes at depth 10. This is development-only operational latency.
@@ -84,6 +84,8 @@ Public access to an official webpage does not establish whole-corpus redistribut
 The public Git repository excludes raw files, corpus text, model weights, annotation histories, databases, secrets and private local paths. The final package must likewise omit API keys, environment-variable files, cost-ledger credentials, unrelated coursework materials and personal data not required by the course. Do not delete uncertain cost reservations to lower reported spending.
 
 The all-Codex workflow supersedes the previous planned DeepSeek annotation pairing. The historical hosted API ledger remains intact; it is not the budget or cost record of new Codex executions. Record subscription and CLI usage honestly without deriving task cost from the user's account quota percentage.
+
+The user explicitly selected 1,000-question retrieval evaluation plus a uniform, pre-fixed 100-question answer sample, and confirms instructor approval for the narrower answer scope. Approval is user-reported, not independently inspected. Keep the original 1,000 accepted-label requirement; report 100 measured answer cases and 600 planned six-variant outputs, not 1,000 completed answers. See [data-rights preflight](DATA_RIGHTS.md) for the registry-only reconstruction fallback and unresolved text permissions.
 
 ## Final verification
 
