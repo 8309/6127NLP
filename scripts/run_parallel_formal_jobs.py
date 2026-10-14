@@ -209,6 +209,16 @@ def execute(args):
         raise ValueError("Native CLI version changed; original execution interface not established")
     admission = transport.Admission(run, cohort)
     driver = transport.driver(admission)
+    rollover = None
+    if getattr(args, "initialize_approved_cli_rollover", False) or getattr(args, "cli_rollover_policy_sha256", None):
+        from formal_cli_rollover import ReviewedRollover
+        rollover = ReviewedRollover(run, admission,
+            initialize_approved=getattr(args, "initialize_approved_cli_rollover", False),
+            expected_policy_sha256=getattr(args, "cli_rollover_policy_sha256", None))
+        driver = rollover.driver()
+    # Fail before any new invocation if the saved run's execution identity is
+    # incompatible. The explicit amendment is the only permitted exception.
+    driver.usage_audit(run)
     stop = threading.Event()
     budget = LockedBudget(args.max_new_calls, stop)
     binding = interrupted_retry_binding(run, args.retry_exact_interrupted_job)
@@ -230,6 +240,8 @@ def execute(args):
         historical_native_cli_sha256=transport.NATIVE_CLI_SHA,
         updated_binary_is_distinct_execution_lineage=True,
         completed503_admission_still_requires_historical_binary=True,
+        cli_rollover_policy_sha256=o.file_hash(rollover.policy_path) if rollover else None,
+        cli_rollover_explicitly_approved=rollover is not None,
         requested_model=cohort.cfg["requested_model"], changed_prompt_schema_sample_or_scores=False)
     checkpoint = run / "parallel_scheduling" / (o.now().replace(":", "-") + "-" + uuid4().hex[:8])
     o.write_new(checkpoint / "policy.json", record)
@@ -252,6 +264,8 @@ def execute(args):
         started_native_attempts=budget.started, interrupted_retry_used=dispatcher.retry_used,
         failures=failures, completed_groups_sha256={p.name:o.file_hash(p) for p in sorted((run / "groups").glob("*.json"))},
         stopped_on_error=bool(failures), pending_inflight_drained=True, automatic_retry=False))
+    if rollover:
+        o.write_new(checkpoint / "cli_rollover_usage.json", rollover.lineage_report())
     if failures:
         print(json.dumps(dict(status="parallel_stopped_not_complete", checkpoint=str(checkpoint), failures=failures), indent=2))
         return 1
@@ -270,6 +284,8 @@ def main():
     parser.add_argument("--start-interval-seconds", type=float, default=20)
     parser.add_argument("--max-new-calls", type=int, default=1200)
     parser.add_argument("--native-cli-sha256", required=True)
+    parser.add_argument("--initialize-approved-cli-rollover", action="store_true")
+    parser.add_argument("--cli-rollover-policy-sha256")
     parser.add_argument("--retry-exact-interrupted-job", action="store_true")
     args = parser.parse_args()
     with exclusive_run(o.long_path(args.resume)):
