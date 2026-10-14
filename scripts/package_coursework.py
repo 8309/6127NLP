@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import subprocess
 import sys
@@ -73,8 +73,29 @@ def guard_source_bytes(name, raw):
         raise ValueError("Potential credential literal in source; package refused: " + name)
 
 
-def package(canonical_root, receipts=()):
+def validated_exclusions(exclude_source):
+    """Accept existing, allowed files by exact checkout-relative path only."""
+    requested = set()
+    checkout = ROOT.resolve()
+    for name in exclude_source:
+        if not isinstance(name, str) or not name or any(char in name for char in "*?[]"):
+            raise ValueError("Source exclusion must be an exact allowed file path")
+        relative = name.replace("\\", "/")
+        if (Path(name).is_absolute() or PureWindowsPath(name).drive
+                or PureWindowsPath(name).root or any(part in {"", ".", ".."} for part in relative.split("/"))
+                or not allowed_source(relative)):
+            raise ValueError("Source exclusion must be an exact allowed file path")
+        path = (checkout / relative).resolve()
+        if not path.is_relative_to(checkout) or not path.is_file():
+            raise ValueError("Source exclusion must name an existing allowed file inside the checkout")
+        requested.add(relative)
+    return sorted(requested)
+
+
+def package(canonical_root, receipts=(), exclude_source=()):
     canonical = Path(canonical_root).resolve()
+    excluded_requested = validated_exclusions(exclude_source)
+    excluded_set, actually_excluded = set(excluded_requested), []
     names = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=ROOT, capture_output=True, check=True).stdout.decode("utf-8").split("\0")
     source = {}
@@ -84,6 +105,9 @@ def package(canonical_root, receipts=()):
         path = (ROOT / name).resolve()
         if not path.is_relative_to(ROOT.resolve()) or not path.is_file():
             raise ValueError("Source file missing or outside checkout")
+        if name in excluded_set:
+            actually_excluded.append(name)
+            continue
         raw = path.read_bytes()
         guard_source_bytes(name, raw)
         source["code/" + name] = raw
@@ -106,6 +130,7 @@ def package(canonical_root, receipts=()):
         guard_source_bytes(name, raw)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, check=True).stdout.decode().strip()
     manifest = dict(schema_version=1, git_base_commit=commit,
+        excluded_requested=excluded_requested, actually_excluded=actually_excluded,
         actual_source_sha256={name: digest(raw) for name, raw in source.items()},
         aggregate_result_sha256={name: digest(raw) for name, raw in results.items()},
         original_local_receipt_sha256=receipt_hashes, source_file_count=len(source),
@@ -132,6 +157,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--canonical-root", required=True, type=Path)
     parser.add_argument("--receipt", action="append", default=[], type=Path)
+    parser.add_argument("--exclude-source", action="append", default=[],
+        help="Exclude one exact allowed checkout-relative file; repeat for additional files")
     args = parser.parse_args()
-    directory, summary = package(args.canonical_root, args.receipt)
+    directory, summary = package(args.canonical_root, args.receipt, args.exclude_source)
     print(json.dumps(dict(output=str(directory), **summary), indent=2))

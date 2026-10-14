@@ -1,6 +1,6 @@
 # Draft Oil Evidence Submission Checklist
 
-Status: DRAFT. The implementation and corpus receipts are available, but the formal experiment results and complete submission package are not ready. An unchecked item below is not supplied by a plan, a directory name or an engineering smoke test.
+Status: DRAFT. The200 DEVELOPMENT/1,000 TEST machine-only dataset is frozen and full1,000-question retrieval evaluation is complete. The fixed100-question answer experiment is blocked by exhausted workspace credits at its first invocation, with0 completed answers. Final answer metrics and submission artifacts remain pending.
 
 The student reports instructor approval for individual completion and machine annotation in place of manual labeling. Preserve this accepted deviation in the final report and, if available, retain the instructor's confirmation with the private course records. Machine labels and model agreement must remain explicitly named; no human agreement is claimed.
 
@@ -28,28 +28,30 @@ The extracted brief records a deadline of 7 November 2026 at 23:59 Singapore tim
 | Warm development retrieval latency | BM25 median 0.175440 s; dense 0.193433 s; hybrid 0.201786 s; 50 queries per mode at depth 10 | Actual median/p95 table in [the report](FINAL_REPORT.md) |
 | English publication fixture suite | 1,415 passed, zero failed, three documented skips | [Publication receipt](../reports/english_publication.json) |
 | Initial development evaluation | Both 50-record streams, all 50 adjudications, frozen development version and actual depth-10 ranked scores | [Report with local artifact references](FINAL_REPORT.md) |
-| Machine agreement | 94.00% answerability/event; 93.73% evidence grades over 973 pairs, measured before adjudication | [Report](FINAL_REPORT.md); not human agreement |
+| Full-cohort machine agreement | Mixed-lineage raw agreement98.67% answerability,93.58% event state,96.59% relevance over15,466 pairs; six populations separate | [Report](FINAL_REPORT.md); not human agreement or accuracy |
 | Real query UI diagnostic | Four-tab in-process query; five passages, two claims, 15.918344 s end to end | [Report](FINAL_REPORT.md); not proof of running HTTP service |
 | Development ablation | Five fixed cases, four original generator plus three fresh support/judge executions | [Report](FINAL_REPORT.md); not held-out accuracy |
 | Sampled-scope local fixture suite | 2,046 passed, zero failures, three documented skips, 306.24 s | Local checkpoint JUnit; later wire-driver/historical-pipeline additions have separate checks |
-| Exact final question selection | 200 development, 1,000 TEST, 18 unused reserves; 7,200 six-condition rankings | Locked local source-first selection; fresh paired labels pending |
+| Exact final question selection | 200 development,1,000 TEST,18 unused reserves;7,200 six-condition rankings; both full annotation streams complete | Locked local source-first selection; reserves never substituted after labels |
 | Existing machine archives | 100 QA records, 4,500 legacy paragraph labels and 728 targeted reviews | [Implementation record](IMPLEMENTATION_REPORT.md) |
-| Held-out evaluation | Not frozen or evaluated | [Annotation protocol](ANNOTATION.md) |
+| Frozen evaluation version | 385086dac68d5dc69dd408a6;200 accepted DEVELOPMENT/1,000 accepted TEST, zero unresolved | [Report](FINAL_REPORT.md) with manifest/receipt hashes |
+| Held-out retrieval | All1,000 TEST questions,6 conditions/6,000 rankings; hybrid cutoff P@5 0.7228/nDCG@5 0.8158 | [Report](FINAL_REPORT.md); pooled machine judgments |
+| Held-out answers | 0/100 questions and0/600 variants; first invocation rejected for exhausted workspace credits | Failed attempt and unknown usage preserved; no automatic retry |
 
 The staged corpus has not been released as the default library. The existing 10,079-passage library and the archived annotation corpus must not be silently mixed with new-version experiments. Historical private receipts do not certify translated public source hashes.
 
 ## Experimental completion gates
 
-- [ ] Fix 200 development and 1,000 held-out QA records with event-group isolation, duplicate checks and legacy-exposure exclusions.
+- [x] Fix200 development and1,000 held-out QA records with conservative family isolation, exact duplicate checks and legacy-exposure exclusions. Semantic/event independence remains provisional.
 - [x] Save the initial 50-question shared pool with mode/rank and authoring hints hidden: 973 question-evidence pairs, matching artifact hashes.
-- [ ] Complete identical pooled inputs for all 200 development and 1,000 held-out questions, hiding prior labels and the other execution's output.
-- [ ] Record requested and observed model identity, prompt and input hashes, decoding settings, raw responses and usage for each run.
-- [ ] Complete two separately blinded Codex annotation executions and schema, quotation, date and statistical-scope validation. The student selected all-Codex annotation; same-model executions do not establish different-model diversity or human agreement.
-- [ ] Compute original-output agreement before adjudication, including coverage, missing records, class distributions, raw agreement and appropriate kappa measures.
+- [x] Complete identical pooled inputs for all200 development and1,000 held-out questions, hiding prior labels and the other execution's output.
+- [x] Record requested default and observed null model identity, prompt/input hashes, raw responses and measured/unknown usage without guessing a physical model or subscription cost.
+- [x] Complete two separately blinded Codex annotation streams and schema, quotation, date and statistical-scope validation. Same-model executions do not establish distinct-model diversity or human agreement; six retained execution populations are disclosed.
+- [x] Compute original-output agreement before adjudication, including complete coverage, missing historical fields, class distributions, raw agreement and kappa by population and mixed-lineage descriptive totals.
 - [ ] Keep unresolved cases and separate adjudication outputs; inspect reproducible consensus samples for shared errors.
-- [ ] Freeze a distinct machine-only evaluation version without altering the human-only freezing gate or old archives.
+- [x] Freeze a distinct complete200/1,000 machine-only version without altering human-only gates or old archives. Original unresolved source history remains separate from the explicit corrective selection.
 - [x] Complete the separate initial 50-record development freeze and depth-10 scoring; do not use it to satisfy the 1,000-record held-out gate.
-- [ ] Report BM25, dense and hybrid Precision@5, pooled Recall@5, MRR@5, nDCG@5 and judged fraction.
+- [x] Report BM25,dense andhybrid Precision@5,pooled Recall@5,MRR@5,nDCG@5 and judged fraction under cutoff on/off for all1,000 TEST questions; recall/nDCG cover998 positive pools.
 - [ ] Run six answer variants, including base, A, B and A plus B, on the same pre-fixed 100-question TEST sample; retain all outputs and failures. Retrieval metrics still cover all 1,000 accepted TEST questions.
 - [x] Complete the five-case development ablation: six future passages removed by A, zero claims removed by B, automatic quality ceilings explicitly disclosed.
 - [ ] Report answer quality, citation support, time errors and insufficiency handling with evaluator provenance.

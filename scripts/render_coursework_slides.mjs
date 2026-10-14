@@ -54,6 +54,21 @@ const uiResult = await readSource('workbench_result');
 const metrics = await readSource('retrieval_metrics', args['draft-only'] !== 'true');
 const ablation = await readSource('ablation_result', args['draft-only'] !== 'true');
 const answerSample = await readSource('answer_sample_plan');
+const formalRetrieval = await readSource('formal_retrieval', false);
+const formalManifest = await readSource('formal_manifest', false);
+const formalStop = await readSource('formal_credit_stop', false);
+if (Boolean(formalRetrieval) !== Boolean(formalManifest)) throw new Error('Bind formal retrieval and its frozen manifest together');
+if (formalRetrieval && (formalRetrieval.status !== 'complete_machine_only1000_TEST_retrieval_evaluation'
+    || formalRetrieval.test_questions !== 1000 || formalRetrieval.ranked_query_conditions !== 6000
+    || formalRetrieval.k !== 5 || formalRetrieval.human_gold !== false
+    || formalRetrieval.dataset_version !== formalManifest.version
+    || formalManifest.split_status_counts.development.accepted !== 200
+    || formalManifest.split_status_counts.test.accepted !== 1000
+    || formalManifest.agreement.paired_records !== 1200)) throw new Error('Incomplete formal retrieval or frozen cohort');
+if (formalStop && (formalStop.completed_answer_questions !== 0 || formalStop.completed_answer_variants !== 0
+    || formalStop.planned_answer_questions !== 100 || formalStop.planned_answer_variants !== 600
+    || formalStop.failure_message !== 'Your workspace is out of credits. Add credits to continue.'
+    || formalStop.automatic_retry !== false)) throw new Error('Use the actual retained credit-stop checkpoint');
 if (corpus.passages !== 11815 || agreement.paired_records !== 50 || retrieval.retrieval_runs !== 150
     || quality.exact_source_offsets !== true || ui.no_api_key_input !== true) {
   throw new Error('Source coverage differs from the requested draft');
@@ -93,7 +108,7 @@ function text(slide, value, x, y, w, h, size = 28, bold = false, fill = color.in
   slideText.push(value);
   return shape;
 }
-function page(title, notes, footer = 'Development draft') {
+function page(title, notes, footer = formalRetrieval ? 'Machine-only TEST retrieval' : 'Development draft') {
   const slide = presentation.slides.add();
   slide.background.fill = '#FFFFFF';
   text(slide, title, 72, 52, 1136, 96, 44, true);
@@ -183,48 +198,64 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
 }
 // 7. Actual raw pre-adjudication agreement.
 {
-  const slide = page('Machine annotation agreement', sourceNote('agreement_receipt'));
+  const currentAgreement = formalManifest?.agreement ?? agreement;
+  const slide = page(formalManifest ? 'Mixed-lineage machine agreement' : 'Machine annotation agreement',
+    sourceNote('agreement_receipt', 'formal_manifest'));
   table(slide, [['Field', 'Judgment pairs', 'Raw agreement', 'Cohen kappa'],
-    ['Answerability', '50', pct(agreement.fields.answerability.raw_agreement), fmt(agreement.fields.answerability.cohens_kappa)],
-    ['Event status', '50', pct(agreement.fields.event_status.raw_agreement), fmt(agreement.fields.event_status.cohens_kappa)],
-    ['Evidence relevance', '973', pct(agreement.fields.relevance.raw_agreement), fmt(agreement.fields.relevance.cohens_kappa)]],
+    ['Answerability', formalManifest ? '1,200' : '50', pct(currentAgreement.fields.answerability.raw_agreement), fmt(currentAgreement.fields.answerability.cohens_kappa)],
+    ['Event status', formalManifest ? '1,200' : '50', pct(currentAgreement.fields.event_status.raw_agreement), fmt(currentAgreement.fields.event_status.cohens_kappa)],
+    ['Evidence relevance', formalManifest ? '15,466' : '973', pct(currentAgreement.fields.relevance.raw_agreement), fmt(currentAgreement.fields.relevance.cohens_kappa)]],
     180, 285, [380, 245, 265, 246], 28);
-  text(slide, 'Two annotation runs use fresh contexts with identical input bytes.', 72, 511, 1136, 47, 28);
+  text(slide, formalManifest ? 'First attempts, retries and corrections remain separate populations in the report.'
+    : 'Two annotation runs use fresh contexts with identical input bytes.', 72, 511, 1136, 56, 28);
   text(slide, 'Native metadata does not expose the model identity. Human agreement remains unmeasured.',
     72, 571, 1136, 74, 27, false, color.muted);
 }
 // 8. Measured latency and machine-adjudicated pooled retrieval quality.
 {
-  const slide = page('Retrieval on 50 development questions', sourceNote('retrieval_receipt', 'retrieval_metrics'));
+  const slide = page(formalRetrieval ? 'Retrieval on 1,000 TEST questions' : 'Retrieval on 50 development questions',
+    sourceNote('retrieval_receipt', 'retrieval_metrics', 'formal_retrieval'));
   const modes = ['bm25', 'dense', 'hybrid'];
   const chart = slide.charts.add('bar', {position: {left: 74, top: 155, width: 1132, height: 286},
-    title: 'Warm retrieval latency (milliseconds)', titleTextStyle: {fontSize: 26, bold: true, fill: color.ink},
+    title: formalRetrieval ? 'TEST nDCG@5' : 'Warm retrieval latency (milliseconds)', titleTextStyle: {fontSize: 26, bold: true, fill: color.ink},
     categories: ['BM25', 'Dense', 'Hybrid'], series: [
-      {name: 'Median', values: modes.map(mode => Math.round(retrieval.latency[mode].median_seconds * 10000) / 10), fill: color.accent},
-      {name: 'P95', values: modes.map(mode => Math.round(retrieval.latency[mode].p95_seconds * 10000) / 10), fill: '#92ACBC'}],
+      {name: formalRetrieval ? 'Cutoff off' : 'Median', values: modes.map(mode => formalRetrieval
+        ? Number(formalRetrieval.summary[mode + ':0'].ndcg_at_k.toFixed(3))
+        : Math.round(retrieval.latency[mode].median_seconds * 10000) / 10), fill: color.accent},
+      {name: formalRetrieval ? 'Cutoff on' : 'P95', values: modes.map(mode => formalRetrieval
+        ? Number(formalRetrieval.summary[mode + ':1'].ndcg_at_k.toFixed(3))
+        : Math.round(retrieval.latency[mode].p95_seconds * 10000) / 10), fill: '#92ACBC'}],
     barOptions: {direction: 'column', grouping: 'clustered', gapWidth: 140}, hasLegend: true,
     legend: {position: 'bottom', textStyle: {fontSize: 24}},
     xAxis: {textStyle: {fontSize: 24}, majorGridlines: null},
-    yAxis: {min: 0, max: 350, majorUnit: 100, numberFormatCode: '0', textStyle: {fontSize: 24},
+    yAxis: {min: 0, max: formalRetrieval ? 1 : 350, majorUnit: formalRetrieval ? 0.2 : 100,
+      numberFormatCode: formalRetrieval ? '0.0' : '0', textStyle: {fontSize: 24},
       majorGridlines: {style: 'solid', fill: color.grid, width: 1}},
-    dataLabels: {showValue: true, position: 'outEnd', numberFormatCode: '0.0', textStyle: {fontSize: 24}},
+    dataLabels: {showValue: true, position: 'outEnd', numberFormatCode: formalRetrieval ? '0.000' : '0.0', textStyle: {fontSize: 24}},
     chartFill: '#FFFFFF', plotAreaFill: '#FFFFFF'});
   utils.applyPresentationChartFont(chart, {fontFamily: font});
   nativeCharts.push(8);
-  if (metrics) {
-    table(slide, [['Mode', 'P@10', 'Pool R@10', 'MRR@10', 'nDCG@10'], ...modes.map(mode => [
+  if (metrics || formalRetrieval) {
+    table(slide, [formalRetrieval ? ['Cutoff on', 'P@5', 'Pool R@5', 'MRR@5', 'nDCG@5']
+      : ['Mode', 'P@10', 'Pool R@10', 'MRR@10', 'nDCG@10'], ...modes.map(mode => [
       mode === 'bm25' ? 'BM25' : mode[0].toUpperCase() + mode.slice(1),
-      ...['precision_at_k', 'pooled_recall_at_k', 'mrr_at_k', 'ndcg_at_k'].map(key => fmt(metrics.summary[mode][key]))])],
+      ...['precision_at_k', 'pooled_recall_at_k', 'mrr_at_k', 'ndcg_at_k'].map(key => fmt(
+        (formalRetrieval ? formalRetrieval.summary[mode + ':1'] : metrics.summary[mode])[key]))])],
       445, 160, [232, 200, 260, 212, 232], 24);
   } else {
     text(slide, 'Relevance metrics await complete machine adjudication.', 72, 485, 1136, 88, 30);
   }
-  text(slide, 'Pool-relative machine scores. Recall and nDCG cover 49 questions with positive evidence.',
+  text(slide, formalRetrieval ? 'Machine pooled judgments. Recall and nDCG cover 998 positive pools. No answer scores.'
+    : 'Pool-relative machine scores. Recall and nDCG cover 49 questions with positive evidence.',
     72, 629, 1136, 37, 24, false, color.muted);
   slide.speakerNotes.text += '\nLatency chart uses the original operational receipt and its linear-percentile P95. '
     + 'The derived retrieval report uses nearest-rank P95. Recall and nDCG exclude the one zero-positive evidence pool.';
   slide.speakerNotes.text += '\nNew literal chart values round to the displayed 0.1 millisecond precision for a portable workbook. '
     + 'The unrounded measurements remain in the hash-bound source receipt.';
+  if (formalRetrieval) slide.speakerNotes.text = sourceNote('formal_retrieval', 'formal_manifest')
+    + '\nSix conditions evaluate the same1,000 TEST questions. Chart values round actual nDCG to three decimals. '
+    + 'Original full-precision results remain unchanged. Precision/MRR use1,000 queries; recall/nDCG use998 positive pools. '
+    + 'Grades1 and2 count as relevant; DCG gain is2^grade minus1. This slide does not report individual retrieval latency.';
 }
 // 9. Actual tested application output, without inventing a browser screenshot.
 {
@@ -272,12 +303,19 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
 // 12. Honest final coverage statement.
 {
   const slide = page('Evaluation coverage and limitations',
-    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan'), 'Development draft');
-  paragraphs(slide, ['Completed development: 50 questions, 100 annotations and 150 retrieval runs.',
+    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan', 'formal_retrieval', 'formal_manifest', 'formal_credit_stop'));
+  paragraphs(slide, formalRetrieval ? [
+    'Frozen machine dataset: 200 DEVELOPMENT and 1,000 TEST questions, each with two labels and accepted source review.',
+    'Complete retrieval: all 1,000 TEST questions across six conditions. Hybrid cutoff filtering removes all ineligible hits.',
+    'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. Six variants total 600 planned outputs.',
+    formalStop ? 'Answer experiment: 0 of 100 complete. The first invocation fails on exhausted workspace credits.'
+      : 'Answer experiment completion requires its separately verified final result.',
+    'Machine judgments can share errors. Model identity, human calibration and data redistribution rights remain unresolved.'
+  ] : ['Completed development: 50 questions, 100 annotations and 150 retrieval runs.',
     'Planned retrieval: all 1,000 fixed TEST questions across six ranking conditions.',
     'Planned answers: 100 TEST questions drawn uniformly with seed 6127 before TEST labeling, across six variants (600 results).',
     'Formal labels and results remain pending. The results shown here are development results.',
-    'Machine errors may correlate. Model identity and human calibration remain unverified.'], 184, 29);
+    'Machine errors may correlate. Model identity and human calibration remain unverified.'], 184, 27);
   slide.speakerNotes.text += '\nApproval source: direct user statement in the task, not an independently inspected course document. '
     + 'The user reports instructor approval for solo work and model annotation. '
     + 'Group, name and matriculation fields remain blank for the final cover. '

@@ -101,7 +101,7 @@ def page_footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.HexColor("#63717b"))
-    canvas.drawString(52, 26, "DRAFT - identity, held-out evaluation and submission links pending")
+    canvas.drawString(52, 26, "DRAFT - answer experiment, cover and submission links pending")
     canvas.drawRightString(A4[0] - 52, 26, str(doc.page))
     canvas.restoreState()
 
@@ -116,6 +116,7 @@ def render(source, output, receipt=None):
     styles = getSampleStyleSheet()
     body = ParagraphStyle("OilBody", parent=styles["BodyText"], fontSize=9, leading=13,
                           spaceAfter=5, splitLongWords=True)
+    reference_body = ParagraphStyle("OilReference", parent=body, fontSize=8.5, leading=11.5, spaceAfter=5)
     table_body = ParagraphStyle("OilCell", parent=body, fontSize=8, leading=11, spaceAfter=0)
     caption = ParagraphStyle("OilCaption", parent=body, fontSize=8, alignment=TA_CENTER,
                              keepWithNext=True)
@@ -126,10 +127,11 @@ def render(source, output, receipt=None):
                                 keepWithNext=True)
     lines = source.read_text(encoding="utf-8").splitlines()
     story, paragraph, table_rows = [], [], []
+    in_references = False
 
     def flush_paragraph():
         if paragraph:
-            story.append(Paragraph(inline(" ".join(paragraph)), body))
+            story.append(Paragraph(inline(" ".join(paragraph)), reference_body if in_references else body))
             paragraph.clear()
 
     def flush_table():
@@ -141,6 +143,8 @@ def render(source, output, receipt=None):
         weights = [max(8, min(50, max(len(row[i]) for row in table_rows))) for i in range(count)]
         for index, name in enumerate(table_rows[0]):
             if name == "Cutoff":
+                weights[index] = max(weights[index], 16)
+            if name == "Questions":
                 weights[index] = max(weights[index], 16)
         widths = [WIDTH * weight / sum(weights) for weight in weights]
         content = [[Paragraph(inline(cell), table_body) for cell in row] for row in table_rows]
@@ -176,6 +180,7 @@ def render(source, output, receipt=None):
             flush_paragraph()
             is_sub = line.startswith("### ")
             text = line[4:] if is_sub else line[3:]
+            in_references = text == "References" or in_references
             story.append(Paragraph(inline(text), subheading if is_sub else heading))
             if text == "Retrieval methods":
                 story.extend([Diagram(architecture()), Paragraph(
@@ -185,7 +190,7 @@ def render(source, output, receipt=None):
                     "Figure 2. Measured development retrieval latency, not answer accuracy.", caption)])
         elif re.match(r"(?:- |\d+\. )", line):
             flush_paragraph()
-            story.append(Paragraph(inline(line), body))
+            story.append(Paragraph(inline(line), reference_body if in_references else body))
         else:
             paragraph.append(line.strip())
     flush_paragraph()

@@ -18,6 +18,19 @@ Fifty initial development questions are fixed: 16 factual, 14 temporal, 10 compa
 
 ## Current subscription-backed workbench
 
+Current formal checkpoint: both annotation streams and source review cover the fixed200 DEVELOPMENT/1,000 TEST bank. Machine-only version `385086dac68d5dc69dd408a6` is frozen with zero unresolved records. Retrieval evaluation completes all1,000 TEST questions in six top-five conditions. Hybrid with cutoff filtering scores Precision@5 0.7228, pooled Recall@5 0.6960, MRR@5 0.9442 and nDCG@5 0.8158. These use machine-pooled judgments; recall/nDCG cover998 positive pools.
+
+The fixed100-question,600-variant answer experiment stops at its first native invocation with an explicit exhausted-workspace-credits error. No answers are complete, the failed input/receipt and unknown usage are preserved, and no retry, model switch or purchase occurs automatically. Report PDF draftv10 and presentation draftv6 incorporate actual retrieval results but are not final submissions. See [the report](docs/FINAL_REPORT.md), [current progress](docs/GITHUB_PROGRESS.md) and [submission checklist](docs/SUBMISSION_CHECKLIST.md).
+
+On the original local checkout, retrieval alone can be reproduced without new model calls. This creates a new result directory and does not retry the failed answer job:
+
+```powershell
+$env:PYTHONPATH='D:/coursework/AI6127/oil-evidence-english/src;D:/coursework/AI6127/oil-evidence-english/scripts'
+& 'D:/coursework/AI6127/oil-evidence/.venv/Scripts/python.exe' -B -X utf8 scripts/run_machine_experiments.py --canonical-root 'D:/coursework/AI6127/oil-evidence' --corpus-run semantic-page-v2-buffer run --frozen-dir 'D:/coursework/AI6127/oil-evidence/data/machine_runs/frozen_evaluation/385086dac68d5dc69dd408a6' --retrieval-run 'D:/coursework/AI6127/oil-evidence/data/machine_runs/candidate-retrieval/2026-10-14T04-17-34.486189+00-00-e3bbbc24bb' --max-new-calls 0
+```
+
+Successful retrieval-only output ends with `partial_new_attempt_limit_reached`,1,000 completed retrieval questions and zero native attempts; that status does not mean answer evaluation is complete. The failed formal run remains under `data/machine_runs/formal-experiments/2026-10-14T05-29-35.082875+00-00-406a2e1b`. Resume only after credits are available and the preserved failure is reviewed, keeping the exact frozen sample/runtime/rankings. Retrying it requires the explicit `--retry-failed` option; do not resample, alter the model request or delete its history.
+
 The user reports instructor approval for solo completion and machine annotation, and selected Codex instead of a hosted API for the new workflow. The English workbench defaults to Codex using the native CLI's existing ChatGPT login. It never reads authentication files or copies API keys. Fresh structured calls preserve original request/output bytes, exact-source checks, emitted token usage and execution receipts. An unknown runtime model identifier remains null; separate contexts do not prove model diversity or human agreement.
 
 The staging UI uses the verified 11,815-passage index explicitly, without replacing the historical default corpus. On the existing local Windows checkout, launch it with the project interpreter:

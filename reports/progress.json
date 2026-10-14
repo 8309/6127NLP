@@ -107,6 +107,46 @@
     "protected_files_unchanged": true,
     "scope": "Unpublished staged index; integrity is not retrieval accuracy or a release gate."
   },
+  "formal_machine_evaluation": {
+    "status": "retrieval_complete_answer_experiment_blocked_workspace_credits",
+    "human_gold": false,
+    "machine_dataset_version": "385086dac68d5dc69dd408a6",
+    "manifest_sha256": "704c2c291cf97fa543f12da78baa552afbb32f415907c527821f454ab980797c",
+    "accepted_development_questions": 200,
+    "accepted_test_questions": 1000,
+    "unresolved_frozen_questions": 0,
+    "annotations_per_stream": 1200,
+    "retrieval_evaluated_test_questions": 1000,
+    "ranked_query_conditions": 6000,
+    "retrieval_depth": 5,
+    "retrieval_result_sha256": "2fb827de689de84adca0e6d518a05d93d063c3fd288932f9a4c3454b19acf2c9",
+    "rounded_hybrid_cutoff_metrics": {
+      "precision_at_5": 0.7228,
+      "pooled_recall_at_5": 0.6960,
+      "mrr_at_5": 0.9442,
+      "ndcg_at_5": 0.8158,
+      "judged_fraction": 1.0,
+      "ineligible_returned_hits": 0,
+      "recall_ndcg_defined_queries": 998
+    },
+    "planned_answer_questions": 100,
+    "completed_answer_questions": 0,
+    "planned_variant_outputs": 600,
+    "completed_variant_outputs": 0,
+    "answer_sample_plan_sha256": "079d484d1100f4a62dd9c687f1a0d575bd92bcc87694c58970ab3de84d1f4baf",
+    "failed_native_answer_attempts": 1,
+    "failed_usage": null,
+    "subscription_dollar_cost": null,
+    "new_paid_api_calls": 0,
+    "automatic_retry": false,
+    "limitations": [
+      "Machine-adjudicated pooled retrieval judgments are not human accuracy or exhaustive corpus recall.",
+      "Answer quality and held-out answer ablations are not measured.",
+      "The failed native attempt explicitly reports exhausted workspace credits and has no completed answer.",
+      "Public results are aggregates; original corpus, raw executions and frozen evidence remain local.",
+      "This checkpoint does not certify submission completion or data redistribution permission."
+    ]
+  },
   "retrieval_smoke": {
     "status": "operational_smoke_passed_not_formal_evaluation",
     "checks": 24,
