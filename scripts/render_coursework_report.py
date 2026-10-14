@@ -101,7 +101,7 @@ def page_footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.HexColor("#63717b"))
-    canvas.drawString(52, 26, "DRAFT - answer experiment, cover and submission links pending")
+    canvas.drawString(52, 26, "DRAFT - cover identifiers and submission links pending")
     canvas.drawRightString(A4[0] - 52, 26, str(doc.page))
     canvas.restoreState()
 

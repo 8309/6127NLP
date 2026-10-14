@@ -13,6 +13,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import textwrap
 import threading
@@ -27,6 +28,7 @@ INTERRUPTED_JOB = "judge-350567f069be594f27a8621f"
 INTERRUPTED_DESCRIPTOR_SHA = "345fd5b53a11e0f6d7d8334508372b1d3c35d61bdfa33a927d46af3cbadab49a"
 INTERRUPTED_REQUEST = "attempts/2026-10-14T07-59-39.922143+00-00-76c1749e/request.json"
 INTERRUPTED_REQUEST_SHA = "6cb4bbc850cd9cff45319ded89175e4470fcbb80bf0debf2effc91ee4416f887"
+REVIEWED_RETRIES_VERSION = "explicit-reviewed-parallel-retries-v1"
 
 
 class SchedulingStopped(RuntimeError):
@@ -134,18 +136,86 @@ def interrupted_retry_binding(run, authorized):
     return expected
 
 
+class ReviewedRetries:
+    """One user-reviewed retry per hash-bound job; never a blanket retry."""
+    def __init__(self, run, path, expected_sha256, native_sha256, rollover_policy_sha256):
+        self.run, self.path = o.long_path(run), o.long_path(path)
+        parent = o.plain_path(self.run / "parallel_scheduling")
+        if not o.plain_path(self.path).is_relative_to(parent) or o.plain_path(self.path) == parent:
+            raise ValueError("Reviewed retry manifest must belong to this run's parallel_scheduling directory")
+        if not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+            raise ValueError("Reviewed retry manifest requires an exact SHA-256")
+        self.sha256 = expected_sha256
+        self.verify()
+        self.manifest = o.read_json(self.path)
+        authorization = self.manifest.get("user_authorization")
+        if (self.manifest.get("schema_version") != REVIEWED_RETRIES_VERSION
+                or self.manifest.get("native_cli_sha256") != native_sha256
+                or not rollover_policy_sha256
+                or self.manifest.get("cli_rollover_policy_sha256") != rollover_policy_sha256
+                or type(self.manifest.get("max_retries_per_job")) is not int
+                or self.manifest["max_retries_per_job"] != 1
+                or not isinstance(authorization, dict)
+                or authorization.get("directly_confirmed") is not True
+                or not isinstance(authorization.get("scope"), str) or not authorization["scope"].strip()):
+            raise ValueError("Reviewed retry manifest metadata differs from the exact user-approved continuation")
+        self.allowed_jobs = self.manifest.get("allowed_jobs")
+        if not isinstance(self.allowed_jobs, dict) or not self.allowed_jobs:
+            raise ValueError("Reviewed retry manifest must name explicit jobs")
+        for job_id, entry in self.allowed_jobs.items():
+            if (not isinstance(job_id, str) or not re.fullmatch(r"[a-z][a-z_]*-[0-9a-f]{24}", job_id)
+                    or not isinstance(entry, dict) or set(entry) != {"original_artifacts_sha256"}):
+                raise ValueError("Reviewed retry manifest contains an invalid immutable job binding")
+            hashes = entry["original_artifacts_sha256"]
+            if (not isinstance(hashes, dict) or "job.json" not in hashes
+                    or not any(name.startswith("attempts/") and name.endswith("/request.json") for name in hashes)):
+                raise ValueError("Reviewed retry must preserve its descriptor and original attempt request")
+            directory = self.run / "jobs" / job_id
+            for name, digest in hashes.items():
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                    raise ValueError("Invalid reviewed retry artifact SHA-256")
+                if o.file_hash(o.contained(directory, name)) != digest:
+                    raise ValueError("Reviewed retry original artifact changed")
+            descriptor = o.read_json(directory / "job.json")
+            expected_id = descriptor["stage"] + "-" + o.protocol.sha256(o.protocol.canonical_bytes(descriptor))[:24]
+            if expected_id != job_id:
+                raise ValueError("Reviewed retry owning descriptor differs from its immutable job ID")
+            if not (directory / "completed.json").exists():
+                self.validate_job(job_id, descriptor)
+
+    def verify(self):
+        if o.file_hash(self.path) != self.sha256:
+            raise ValueError("Reviewed retry manifest changed")
+
+    def validate_job(self, job_id, key):
+        self.verify()
+        entry = self.allowed_jobs[job_id]
+        directory = self.run / "jobs" / job_id
+        if o.read_json(directory / "job.json") != key:
+            raise ValueError("Reviewed retry owning job descriptor changed")
+        expected = entry["original_artifacts_sha256"]
+        actual = {path.relative_to(directory).as_posix():o.file_hash(path)
+                  for path in directory.rglob("*") if path.is_file()}
+        if actual != expected:
+            raise ValueError("Reviewed retry entire original artifact inventory changed")
+
+
 class Dispatcher:
-    def __init__(self, driver, admission, budget, stop, interval, retry_binding, native_binding=None):
+    def __init__(self, driver, admission, budget, stop, interval, retry_binding, native_binding=None, reviewed_retries=None):
         self.driver, self.admission, self.budget, self.stop = driver, admission, budget, stop
         self.gate = StartGate(interval, stop)
         self.retry_binding = retry_binding
         self.native_binding = native_binding
+        self.reviewed_retries = reviewed_retries
+        self.used_reviewed_retries = set()
         self.lock, self.active, self.retry_used = threading.Lock(), set(), False
 
     def caller(self, *args, **kwargs):
         self.gate.enter()
         print("Native start: " + str(args[3]), flush=True)
         try:
+            if self.reviewed_retries is not None:
+                self.reviewed_retries.verify()
             if self.native_binding is not None:
                 helper, _ = o._load_isolation_snapshot()
                 if o.file_hash(helper.discover_native_cli(helper.DEFAULT_CLI)) != self.native_binding:
@@ -169,6 +239,18 @@ class Dispatcher:
         with self.lock:
             if job_id in self.active:
                 raise ValueError("Concurrent owners of one immutable job")
+            if self.reviewed_retries is not None:
+                try:
+                    self.reviewed_retries.verify()
+                    if job_id in self.reviewed_retries.allowed_jobs and not (run / "jobs" / job_id / "completed.json").exists():
+                        if job_id in self.used_reviewed_retries:
+                            raise ValueError("Reviewed immutable job retry already consumed")
+                        self.reviewed_retries.validate_job(job_id, key)
+                        self.used_reviewed_retries.add(job_id)
+                        retry = True
+                except Exception:
+                    self.stop.set()
+                    raise
             if job_id == INTERRUPTED_JOB and self.retry_binding and not (run / "jobs" / job_id / "completed.json").exists():
                 if self.retry_used:
                     raise ValueError("Reviewed interrupted job retry already consumed")
@@ -222,7 +304,14 @@ def execute(args):
     stop = threading.Event()
     budget = LockedBudget(args.max_new_calls, stop)
     binding = interrupted_retry_binding(run, args.retry_exact_interrupted_job)
-    dispatcher = Dispatcher(driver, admission, budget, stop, args.start_interval_seconds, binding, args.native_cli_sha256)
+    reviewed_path = getattr(args, "reviewed_retry_manifest", None)
+    reviewed_sha256 = getattr(args, "reviewed_retry_manifest_sha256", None)
+    if bool(reviewed_path) != bool(reviewed_sha256):
+        raise ValueError("Reviewed retry manifest and SHA-256 must be supplied together")
+    reviewed = ReviewedRetries(run, reviewed_path, reviewed_sha256, args.native_cli_sha256,
+        o.file_hash(rollover.policy_path) if rollover else None) if reviewed_path else None
+    dispatcher = Dispatcher(driver, admission, budget, stop, args.start_interval_seconds, binding,
+        args.native_cli_sha256, reviewed)
     generated = group_source()
     namespace = dict(driver.__dict__, job=dispatcher.job)
     exec(compile(generated, "<pinned-original-group-scheduling>", "exec"), namespace)
@@ -234,8 +323,13 @@ def execute(args):
         transport_policy_sha256=o.file_hash(admission.policy_path),
         max_new_calls=args.max_new_calls, frozen_inputs_unchanged=True, human_gold=False,
         retry_exact_interrupted_job=INTERRUPTED_JOB if binding else None, interrupted_original_sha256=binding,
+        reviewed_retry_manifest=str(reviewed.path) if reviewed else None,
+        reviewed_retry_manifest_sha256=reviewed.sha256 if reviewed else None,
+        reviewed_retry_allowed_job_ids=sorted(reviewed.allowed_jobs) if reviewed else [],
+        reviewed_retry_maximum_per_job=1 if reviewed else None,
         prior_interrupted_execution_usage="unknown_not_zero", failed_job_automatic_retry=False,
-        user_authorization="Continue in parallel; resume the exact interrupted request once",
+        user_authorization=reviewed.manifest["user_authorization"]["scope"] if reviewed else
+            "Continue in parallel; resume the exact interrupted request once",
         native_cli_sha256=args.native_cli_sha256, native_cli_version=native_version,
         historical_native_cli_sha256=transport.NATIVE_CLI_SHA,
         updated_binary_is_distinct_execution_lineage=True,
@@ -262,6 +356,8 @@ def execute(args):
     o._assert_hashes(admission.guards)
     o.write_new(checkpoint / "completion.json", dict(policy_sha256=o.file_hash(checkpoint / "policy.json"),
         started_native_attempts=budget.started, interrupted_retry_used=dispatcher.retry_used,
+        used_reviewed_retry_job_ids=sorted(dispatcher.used_reviewed_retries),
+        reviewed_retry_jobs_consumed=len(dispatcher.used_reviewed_retries),
         failures=failures, completed_groups_sha256={p.name:o.file_hash(p) for p in sorted((run / "groups").glob("*.json"))},
         stopped_on_error=bool(failures), pending_inflight_drained=True, automatic_retry=False))
     if rollover:
@@ -287,6 +383,8 @@ def main():
     parser.add_argument("--initialize-approved-cli-rollover", action="store_true")
     parser.add_argument("--cli-rollover-policy-sha256")
     parser.add_argument("--retry-exact-interrupted-job", action="store_true")
+    parser.add_argument("--reviewed-retry-manifest", type=Path)
+    parser.add_argument("--reviewed-retry-manifest-sha256")
     args = parser.parse_args()
     with exclusive_run(o.long_path(args.resume)):
         return execute(args)
