@@ -11,6 +11,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { Presentation, PresentationFile, FileBlob } from '@oai/artifact-tool';
+import { FORMAL_ANSWER_VARIANTS, FORMAL_ANSWER_NAMES, validateFormalAnswerResult } from './formal_answer_slide_data.mjs';
 
 if (!process.env.RUNTIME_NODE_MODULES) throw new Error('Set the documented bundled RUNTIME_NODE_MODULES for validation');
 
@@ -57,6 +58,7 @@ const answerSample = await readSource('answer_sample_plan');
 const formalRetrieval = await readSource('formal_retrieval', false);
 const formalManifest = await readSource('formal_manifest', false);
 const formalStop = await readSource('formal_credit_stop', false);
+const formalAnswers = await readSource('formal_answer_result', false);
 if (Boolean(formalRetrieval) !== Boolean(formalManifest)) throw new Error('Bind formal retrieval and its frozen manifest together');
 if (formalRetrieval && (formalRetrieval.status !== 'complete_machine_only1000_TEST_retrieval_evaluation'
     || formalRetrieval.test_questions !== 1000 || formalRetrieval.ranked_query_conditions !== 6000
@@ -85,6 +87,11 @@ if (answerSample.original_test_count !== 1000 || answerSample.answer_sample_coun
     || answerSample.selected_before_test_labels !== true || answerSample.selected_before_test_native_attempts !== true) {
   throw new Error('Use the fixed pre-label uniform100-of1000 TEST answer sample');
 }
+if (formalAnswers) validateFormalAnswerResult(formalAnswers, {
+  manifest: formalManifest, retrieval: formalRetrieval,
+  sampleSha256: hashes[path.resolve(sources.answer_sample_plan)],
+  retrievalSha256: sources.formal_retrieval ? hashes[path.resolve(sources.formal_retrieval)] : null,
+});
 await fs.mkdir(buildDir, {recursive: true});
 await fs.mkdir(path.dirname(finalPath), {recursive: true});
 const presentation = Presentation.create({slideSize: {width: 1280, height: 720}});
@@ -108,7 +115,8 @@ function text(slide, value, x, y, w, h, size = 28, bold = false, fill = color.in
   slideText.push(value);
   return shape;
 }
-function page(title, notes, footer = formalRetrieval ? 'Machine-only TEST retrieval' : 'Development draft') {
+function page(title, notes, footer = formalAnswers ? 'Machine-only TEST evaluation'
+  : formalRetrieval ? 'Machine-only TEST retrieval' : 'Development draft') {
   const slide = presentation.slides.add();
   slide.background.fill = '#FFFFFF';
   text(slide, title, 72, 52, 1136, 96, 44, true);
@@ -245,7 +253,7 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   } else {
     text(slide, 'Relevance metrics await complete machine adjudication.', 72, 485, 1136, 88, 30);
   }
-  text(slide, formalRetrieval ? 'Machine pooled judgments. Recall and nDCG cover 998 positive pools. No answer scores.'
+  text(slide, formalRetrieval ? 'Machine pooled judgments. Recall and nDCG cover 998 positive pools.'
     : 'Pool-relative machine scores. Recall and nDCG cover 49 questions with positive evidence.',
     72, 629, 1136, 37, 24, false, color.muted);
   slide.speakerNotes.text += '\nLatency chart uses the original operational receipt and its linear-percentile P95. '
@@ -267,10 +275,32 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   text(slide, 'No API-key input. AppTest confirms execution. Live browser HTTP behavior remains unverified.',
     72, 599, 1136, 62, 25, false, color.muted);
 }
-// 10. Actual diagnostic ablation only.
+// 10. Complete formal answer metrics when present, otherwise the original pilot.
 {
-  const slide = page('A and B: Five-case diagnostic pilot', sourceNote('ablation_result'));
-  if (ablation) {
+  const slide = page(formalAnswers ? 'Answers on 100 TEST questions' : 'A and B: Five-case diagnostic pilot',
+    sourceNote('formal_answer_result', 'answer_sample_plan', 'formal_manifest', 'ablation_result'));
+  if (formalAnswers) {
+    table(slide, [['Variant', 'Machine\ncorrectness', 'Claim\nsupport', 'Citation\nsupport', 'Future\nhits'],
+      ...FORMAL_ANSWER_VARIANTS.map((key, index) => {
+        const result = formalAnswers.summary[key];
+        return [FORMAL_ANSWER_NAMES[index], pct(result.automatic_correctness),
+          pct(result.automatic_claim_faithfulness), pct(result.automatic_citation_support_rate),
+          String(result.future_evidence_count)];
+      })], 176, 399, [270, 246, 250, 250, 120], 24);
+    text(slide, '100 questions per variant. Claim and citation denominators vary.', 72, 587, 1136, 36, 26);
+    text(slide, 'Machine references and judges can share errors. Human calibration remains unmeasured.',
+      72, 628, 1136, 37, 24, false, color.muted);
+    slide.speakerNotes.text += '\nCorrectness averages the automatic ordinal score divided by two. '
+      + 'Claim support and citation support pool emitted claims and claim-citation pairs, respectively. '
+      + 'Their denominators differ across variants because B may remove claims. Undefined metrics remain undefined. '
+      + 'Future hits count retrieved evidence, not erroneous answer claims. All variants share the pre-label TEST sample. '
+      + FORMAL_ANSWER_VARIANTS.map(key => {
+        const row = formalAnswers.summary[key];
+        return `${key}: claim judgments=${row.automatic_claim_faithfulness_denominator}, `
+          + `citation judgments=${row.automatic_citation_support_rate_denominator}, `
+          + `claims removed=${row.claims_removed}, ineligible citations=${row.ineligible_citation_count}.`;
+      }).join('\n');
+  } else if (ablation) {
     const keys = ['hybrid_base', 'hybrid_A', 'hybrid_B', 'hybrid_AB'];
     const names = ['Base', 'A: cutoff', 'B: verification', 'A + B'];
     table(slide, [['Variant', 'Machine\ncorrectness', 'Context\nprecision', 'Future\nhits', 'Ineligible\ncitations'],
@@ -289,26 +319,32 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
 }
 // 11. Evidence-grounded failures and limits.
 {
-  const futureCount = ablation?.summary?.hybrid_base?.future_evidence_count;
-  const slide = page('Failure cases and unresolved risks', sourceNote('ablation_result', 'workbench_result', 'agreement_receipt'));
+  const futureCount = formalAnswers?.summary.hybrid_base.future_evidence_count
+    ?? ablation?.summary?.hybrid_base?.future_evidence_count;
+  const slide = page('Failure cases and unresolved risks',
+    sourceNote('formal_answer_result', 'ablation_result', 'workbench_result', 'agreement_receipt'));
   table(slide, [['Case', 'Observed issue or tested risk', 'Current response'],
-    ['Future evidence', futureCount === undefined ? 'Future-source leakage control' : `${futureCount} future hits in the base pilot`, 'A filters availability'],
+    ['Future evidence', futureCount === undefined ? 'Future-source leakage control'
+      : `${futureCount} future hits in the ${formalAnswers ? 'formal base' : 'base pilot'}`, 'A filters availability'],
     ['Policy effects', 'A notice alone cannot establish physical supply effects', 'Declare insufficient evidence'],
     ['Statistical units', 'Crude oil and total liquids cover different products', 'Keep product scope and units'],
     ['Latest forecast', 'The UI query retrieved 2018 and 2019 outlooks', 'Latest-report relevance remains unresolved']],
     176, 438, [240, 540, 356], 25);
-  text(slide, 'Exact quotes and dates verify format. Semantic support still needs evaluation.',
+  text(slide, formalAnswers ? 'Automatic judges assess semantic support. Human calibration remains unmeasured.'
+    : 'Exact quotes and dates verify format. Semantic support still needs evaluation.',
     72, 624, 1136, 40, 24, false, color.muted);
 }
 // 12. Honest final coverage statement.
 {
   const slide = page('Evaluation coverage and limitations',
-    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan', 'formal_retrieval', 'formal_manifest', 'formal_credit_stop'));
+    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan', 'formal_retrieval', 'formal_manifest', 'formal_credit_stop', 'formal_answer_result'));
   paragraphs(slide, formalRetrieval ? [
     'Frozen machine dataset: 200 DEVELOPMENT and 1,000 TEST questions, each with two labels and accepted source review.',
     'Complete retrieval: all 1,000 TEST questions across six conditions. Hybrid cutoff filtering removes all ineligible hits.',
-    'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. Six variants total 600 planned outputs.',
-    formalStop ? 'Answer experiment: 0 of 100 complete. The first invocation fails on exhausted workspace credits.'
+    formalAnswers ? 'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. All six variants use the same sample.'
+      : 'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. Six variants total 600 planned outputs.',
+    formalAnswers ? 'Complete answers: 100 questions and 600 variant outputs with automatic quality judgments. Answer results do not cover all 1,000 questions.'
+      : formalStop ? 'Answer experiment: 0 of 100 complete. The first invocation fails on exhausted workspace credits.'
       : 'Answer experiment completion requires its separately verified final result.',
     'Machine judgments can share errors. Model identity, human calibration and data redistribution rights remain unresolved.'
   ] : ['Completed development: 50 questions, 100 annotations and 150 retrieval runs.',
@@ -324,6 +360,9 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
     + 'before any TEST annotation or scoring. All 1,000 TEST labels must pass formal preflight. '
     + 'Only the predetermined 100 questions enter answer generation and judging, with 600 planned variant results. '
     + 'No formal result or measured gain follows from the sampling plan alone.';
+  if (formalAnswers) slide.speakerNotes.text += '\nThe bound final result confirms 600 completed answer variants. '
+    + 'The earlier credit-stop checkpoint remains historical failure evidence and does not describe current coverage. '
+    + 'No measured gain or human accuracy claim follows solely from completion.';
 }
 if (presentation.slides.items.length !== 12) throw new Error('Expected exactly 12 slides including cover');
 const candidatePath = path.join(buildDir, 'candidate.pptx');

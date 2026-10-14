@@ -1,6 +1,6 @@
 # Draft Oil Evidence Submission Checklist
 
-Status: DRAFT. The200 DEVELOPMENT/1,000 TEST machine-only dataset is frozen and full1,000-question retrieval evaluation is complete. The fixed100-question answer experiment is blocked by exhausted workspace credits at its first invocation, with0 completed answers. Final answer metrics and submission artifacts remain pending.
+Status: DRAFT. The200 DEVELOPMENT/1,000 TEST machine-only dataset is frozen and full1,000-question retrieval evaluation is complete. The fixed 100-question answer experiment is paused on a new judge invocation reporting `429 Too Many Requests`, exit code 1, unknown usage and no final output or completed turn. Nine parsed job outputs and three completed-503 certificates are retained, but no complete question group or formal variant is counted. The original credit failure, reviewed retry, false receipts and once-counted known usage remain separate. A recorded, outcome-blind transport-policy extension changes four private-copy acceptance predicates without altering the original driver file, native inputs or metrics; it cannot admit the output-less 429 failure. Final 100-question/600-variant coverage, answer metrics and submission artifacts remain pending.
 
 The student reports instructor approval for individual completion and machine annotation in place of manual labeling. Preserve this accepted deviation in the final report and, if available, retain the instructor's confirmation with the private course records. Machine labels and model agreement must remain explicitly named; no human agreement is claimed.
 
@@ -36,7 +36,7 @@ The extracted brief records a deadline of 7 November 2026 at 23:59 Singapore tim
 | Existing machine archives | 100 QA records, 4,500 legacy paragraph labels and 728 targeted reviews | [Implementation record](IMPLEMENTATION_REPORT.md) |
 | Frozen evaluation version | 385086dac68d5dc69dd408a6;200 accepted DEVELOPMENT/1,000 accepted TEST, zero unresolved | [Report](FINAL_REPORT.md) with manifest/receipt hashes |
 | Held-out retrieval | All1,000 TEST questions,6 conditions/6,000 rankings; hybrid cutoff P@5 0.7228/nDCG@5 0.8158 | [Report](FINAL_REPORT.md); pooled machine judgments |
-| Held-out answers | 0/100 questions and0/600 variants; first invocation rejected for exhausted workspace credits | Failed attempt and unknown usage preserved; no automatic retry |
+| Held-out answers | Same fixed 100-question/600-variant experiment paused on 429; nine partial job outputs, zero complete groups or formal variants | Eleven native attempts: six accepted, five false; three complete-503 certificates, nine known/two unknown usages; exact 429 job requires reviewed retry |
 
 The staged corpus has not been released as the default library. The existing 10,079-passage library and the archived annotation corpus must not be silently mixed with new-version experiments. Historical private receipts do not certify translated public source hashes.
 
@@ -52,7 +52,8 @@ The staged corpus has not been released as the default library. The existing 10,
 - [x] Freeze a distinct complete200/1,000 machine-only version without altering human-only gates or old archives. Original unresolved source history remains separate from the explicit corrective selection.
 - [x] Complete the separate initial 50-record development freeze and depth-10 scoring; do not use it to satisfy the 1,000-record held-out gate.
 - [x] Report BM25,dense andhybrid Precision@5,pooled Recall@5,MRR@5,nDCG@5 and judged fraction under cutoff on/off for all1,000 TEST questions; recall/nDCG cover998 positive pools.
-- [ ] Run six answer variants, including base, A, B and A plus B, on the same pre-fixed 100-question TEST sample; retain all outputs and failures. Retrieval metrics still cover all 1,000 accepted TEST questions.
+- [x] Pass the actual zero-call completed-503 recovery on the same eight-case A plus B job. Preserve its original false receipt and raw artifacts; count known usage once. Disclose the outcome-blind transport-policy extension and four acceptance-predicate replacements in the executed private copy, rather than claiming the original execution contract is unmodified.
+- [ ] Resume the same pre-fixed 100-question, six-variant TEST experiment only after availability changes and a retry of the exact preserved 429 judge job is reviewed. Retain the original credit failure, accepted reviewed retry, three transport certificates and partial outputs; no automatic native retries are authorized. Do not infer credits, an account-limit cause or reset time from the 429 event. Retrieval metrics still cover all 1,000 accepted TEST questions. Validate final 100-question/600-variant coverage before reporting answer quality.
 - [x] Complete the five-case development ablation: six future passages removed by A, zero claims removed by B, automatic quality ceilings explicitly disclosed.
 - [ ] Report answer quality, citation support, time errors and insufficiency handling with evaluator provenance.
 - [x] Measure warm sequential retrieval median and p95 on the initial 50 questions in all three modes at depth 10. This is development-only operational latency.

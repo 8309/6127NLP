@@ -108,7 +108,7 @@
     "scope": "Unpublished staged index; integrity is not retrieval accuracy or a release gate."
   },
   "formal_machine_evaluation": {
-    "status": "retrieval_complete_answer_experiment_blocked_workspace_credits",
+    "status": "retrieval_complete_answer_experiment_paused_incomplete429",
     "human_gold": false,
     "machine_dataset_version": "385086dac68d5dc69dd408a6",
     "manifest_sha256": "704c2c291cf97fa543f12da78baa552afbb32f415907c527821f454ab980797c",
@@ -134,18 +134,51 @@
     "planned_variant_outputs": 600,
     "completed_variant_outputs": 0,
     "answer_sample_plan_sha256": "079d484d1100f4a62dd9c687f1a0d575bd92bcc87694c58970ab3de84d1f4baf",
-    "failed_native_answer_attempts": 1,
+    "native_rejected_answer_attempts": 5,
+    "native_accepted_answer_attempts": 6,
+    "completed503_certified_output_attempts": 3,
+    "retained_parsed_job_outputs": 9,
+    "executions_with_known_usage": 9,
+    "executions_with_unknown_usage": 2,
+    "known_native_token_totals": {
+      "input_tokens": 307660,
+      "output_tokens": 14188,
+      "reasoning_output_tokens": 172,
+      "cached_input_tokens": 0,
+      "cache_write_input_tokens": 0
+    },
+    "latest_failure_message": "exceeded retry limit, last status: 429 Too Many Requests",
+    "latest_failed_receipt_sha256": "370448831ae60f531a8376785aafc830afff6f86847e3306d3603a1e7e17657d",
+    "latest_failure_has_completed_output": false,
+    "transport_policy_sha256": "023a6c1dcb4d8f68026c85a08364dc9e798bdbaebeb6b40f7573f9b26c81844b",
+    "transport_adapter_sha256": "d07210ae96944669e2afcbb087b98c641007b7b65eeb085ab2aa6071904797f1",
+    "transport_private_predicate_replacements": 4,
+    "original_operational_receipts_unchanged": true,
     "failed_usage": null,
     "subscription_dollar_cost": null,
     "new_paid_api_calls": 0,
     "automatic_retry": false,
     "limitations": [
       "Machine-adjudicated pooled retrieval judgments are not human accuracy or exhaustive corpus recall.",
-      "Answer quality and held-out answer ablations are not measured.",
-      "The failed native attempt explicitly reports exhausted workspace credits and has no completed answer.",
+      "Final100-question answer quality and held-out answer ablations remain incomplete; nine parsed job outputs are retained partial work.",
+      "The original credit failure and latest incomplete429 failure both retain unknown usage. Account cause and reset time are unverified.",
+      "Three complete503 results have separate zero-call certificates under a disclosed transport-policy extension; native false receipts remain false.",
+      "Token totals cover only these exact formal experiment executions, excluding parent, subagent and earlier project usage. No full-project dollar total is inferred.",
       "Public results are aggregates; original corpus, raw executions and frozen evidence remain local.",
       "This checkpoint does not certify submission completion or data redistribution permission."
     ]
+  },
+  "current_engineering_verification": {
+    "pytest_passed": 2510,
+    "pytest_skipped": 3,
+    "pytest_failures": 0,
+    "pytest_wall_seconds": 546.45,
+    "pytest_junit_sha256": "b174eaac9857d11298e6d40dba5a2ef1f8872490eaf431c4ac430b8dde4e6bda",
+    "excluded_preserved_paused_test": "tests/test_recovered_formal_closeout.py",
+    "separate_node_fixtures_passed": 26,
+    "protected_formal_plan_files": 152,
+    "protected_file_mismatches": 0,
+    "formal_answer_quality_established": false
   },
   "retrieval_smoke": {
     "status": "operational_smoke_passed_not_formal_evaluation",
