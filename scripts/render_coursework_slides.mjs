@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { Presentation, PresentationFile, FileBlob } from '@oai/artifact-tool';
 import { FORMAL_ANSWER_VARIANTS, FORMAL_ANSWER_NAMES, validateFormalAnswerResult } from './formal_answer_slide_data.mjs';
+import { validateFormalRuntimePolicy, runtimePolicySpeakerNotes, RUNTIME_LIMITATION_TEXT, RUNTIME_PENDING_TEXT } from './formal_runtime_slide_data.mjs';
 
 if (!process.env.RUNTIME_NODE_MODULES) throw new Error('Set the documented bundled RUNTIME_NODE_MODULES for validation');
 
@@ -59,6 +60,7 @@ const formalRetrieval = await readSource('formal_retrieval', false);
 const formalManifest = await readSource('formal_manifest', false);
 const formalStop = await readSource('formal_credit_stop', false);
 const formalAnswers = await readSource('formal_answer_result', false);
+const formalRuntimePolicy = await readSource('formal_cli_rollover_policy', false);
 if (Boolean(formalRetrieval) !== Boolean(formalManifest)) throw new Error('Bind formal retrieval and its frozen manifest together');
 if (formalRetrieval && (formalRetrieval.status !== 'complete_machine_only1000_TEST_retrieval_evaluation'
     || formalRetrieval.test_questions !== 1000 || formalRetrieval.ranked_query_conditions !== 6000
@@ -91,6 +93,12 @@ if (formalAnswers) validateFormalAnswerResult(formalAnswers, {
   manifest: formalManifest, retrieval: formalRetrieval,
   sampleSha256: hashes[path.resolve(sources.answer_sample_plan)],
   retrievalSha256: sources.formal_retrieval ? hashes[path.resolve(sources.formal_retrieval)] : null,
+});
+if (formalRuntimePolicy) validateFormalRuntimePolicy(formalRuntimePolicy, {
+  policySha256: hashes[path.resolve(sources.formal_cli_rollover_policy)],
+  sampleSha256: hashes[path.resolve(sources.answer_sample_plan)],
+  frozenManifestSha256: formalManifest ? hashes[path.resolve(sources.formal_manifest)] : null,
+  formalAnswerResult: formalAnswers,
 });
 await fs.mkdir(buildDir, {recursive: true});
 await fs.mkdir(path.dirname(finalPath), {recursive: true});
@@ -337,21 +345,24 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
 // 12. Honest final coverage statement.
 {
   const slide = page('Evaluation coverage and limitations',
-    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan', 'formal_retrieval', 'formal_manifest', 'formal_credit_stop', 'formal_answer_result'));
+    sourceNote('agreement_receipt', 'retrieval_metrics', 'ablation_result', 'answer_sample_plan', 'formal_retrieval', 'formal_manifest', 'formal_credit_stop', 'formal_answer_result', 'formal_cli_rollover_policy'));
   paragraphs(slide, formalRetrieval ? [
     'Frozen machine dataset: 200 DEVELOPMENT and 1,000 TEST questions, each with two labels and accepted source review.',
     'Complete retrieval: all 1,000 TEST questions across six conditions. Hybrid cutoff filtering removes all ineligible hits.',
     formalAnswers ? 'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. All six variants use the same sample.'
       : 'Fixed answer sample: 100 TEST questions, seed 6127, selected before TEST labeling. Six variants total 600 planned outputs.',
     formalAnswers ? 'Complete answers: 100 questions and 600 variant outputs with automatic quality judgments. Answer results do not cover all 1,000 questions.'
+      : formalRuntimePolicy ? RUNTIME_PENDING_TEXT
       : formalStop ? 'Answer experiment: 0 of 100 complete. The first invocation fails on exhausted workspace credits.'
       : 'Answer experiment completion requires its separately verified final result.',
-    'Machine judgments can share errors. Model identity, human calibration and data redistribution rights remain unresolved.'
+    formalRuntimePolicy ? RUNTIME_LIMITATION_TEXT
+      : 'Machine judgments can share errors. Model identity, human calibration and data redistribution rights remain unresolved.'
   ] : ['Completed development: 50 questions, 100 annotations and 150 retrieval runs.',
     'Planned retrieval: all 1,000 fixed TEST questions across six ranking conditions.',
     'Planned answers: 100 TEST questions drawn uniformly with seed 6127 before TEST labeling, across six variants (600 results).',
     'Formal labels and results remain pending. The results shown here are development results.',
-    'Machine errors may correlate. Model identity and human calibration remain unverified.'], 184, 27);
+    formalRuntimePolicy ? RUNTIME_LIMITATION_TEXT
+      : 'Machine errors may correlate. Model identity and human calibration remain unverified.'], 184, 27);
   slide.speakerNotes.text += '\nApproval source: direct user statement in the task, not an independently inspected course document. '
     + 'The user reports instructor approval for solo work and model annotation. '
     + 'Group, name and matriculation fields remain blank for the final cover. '
@@ -363,6 +374,7 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   if (formalAnswers) slide.speakerNotes.text += '\nThe bound final result confirms 600 completed answer variants. '
     + 'The earlier credit-stop checkpoint remains historical failure evidence and does not describe current coverage. '
     + 'No measured gain or human accuracy claim follows solely from completion.';
+  if (formalRuntimePolicy) slide.speakerNotes.text += runtimePolicySpeakerNotes();
 }
 if (presentation.slides.items.length !== 12) throw new Error('Expected exactly 12 slides including cover');
 const candidatePath = path.join(buildDir, 'candidate.pptx');
