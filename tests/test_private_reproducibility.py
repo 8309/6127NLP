@@ -1,5 +1,6 @@
 """Synthetic local-private packaging fixtures; never actual coursework data."""
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -265,3 +266,157 @@ def test_extended_credentials_path_is_still_refused(bundle, snapshot):
     secret = snapshot["write"](snapshot["model"].parent / "auth.json", b"fixture auth")
     with pytest.raises(ValueError, match="Credential/environment"):
         bundle.safe_file(bundle.io_path(secret), {"canonical":snapshot["canonical"]})
+
+
+def reviewed_url_fixture(bundle, snapshot, *, prefix=b"", suffix=b""):
+    """A machine syntax review binds one synthetic URL substring, never a token class."""
+    raw = snapshot["write"](snapshot["canonical"] / "data/raw/reviewed.html",
+        prefix + b'<a href="https://example.invalid/risk-' + b"public-article-" * 4 + b'2026">fixture</a>' + suffix)
+    value = raw.read_bytes()
+    match = bundle.SECRETS.search(value)
+    assert match is not None
+    row = dict(archive_path="canonical/data/raw/reviewed.html", file_sha256=bundle.sha(raw),
+               byte_offset=match.start(), match_length=len(match.group()), match_sha256=hashlib.sha256(match.group()).hexdigest())
+    review = dict(schema_version=1, classification="embedded_public_article_url_slug",
+                  review_provenance="codex_syntax_review_not_human", findings=[row])
+    review_path = snapshot["write"](snapshot["canonical"] / "data/machine_runs/private_reproducibility_review/review.json", review)
+    snapshot["receipt"]["protected_sha256"][str(raw)] = bundle.sha(raw)
+    snapshot["write"](snapshot["audit"], snapshot["receipt"])
+    snapshot["args"]["audit_sha256"] = bundle.sha(snapshot["audit"])
+    snapshot["args"]["benign_url_pattern_review"] = review_path
+    return raw, review_path, review, row
+
+
+def test_exact_machine_review_preserves_every_original_byte_and_manifest(bundle, snapshot):
+    raw, review_path, review, row = reviewed_url_fixture(bundle, snapshot)
+    before = raw.read_bytes()
+    manifest = bundle.inventory(**snapshot["args"])
+    recorded = manifest["credential_pattern_review"]
+    assert recorded["review_provenance"] == "codex_syntax_review_not_human"
+    assert recorded["reviewed_benign_findings"] == [row]
+    assert recorded["review_file_sha256"] == bundle.sha(review_path)
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/reviewed.zip"
+    bundle.package(manifest, snapshot["canonical"], output)
+    with zipfile.ZipFile(output) as archive:
+        assert archive.read(row["archive_path"]) == before
+        assert json.loads(archive.read(recorded["review_file"])) == review
+        assert json.loads(archive.read("MANIFEST.json"))["credential_pattern_review"] == recorded
+    assert raw.read_bytes() == before
+
+
+@pytest.mark.parametrize("field,value", [
+    ("archive_path", "canonical/models/model.onnx"),
+    ("archive_path", "canonical/data/raw/../reviewed.html"),
+    ("file_sha256", "0" * 64),
+    ("byte_offset", 0),
+    ("byte_offset", True),
+    ("match_length", 129),
+    ("match_length", True),
+    ("match_sha256", "0" * 64),
+])
+def test_review_never_accepts_wrong_path_file_span_or_match_hash(bundle, snapshot, field, value):
+    _, review_path, review, row = reviewed_url_fixture(bundle, snapshot)
+    row[field] = value
+    snapshot["write"](review_path, review)
+    with pytest.raises(ValueError):
+        bundle.inventory(**snapshot["args"])
+
+
+@pytest.mark.parametrize("field,value", [("schema_version", True), ("classification", "safe_url"),
+    ("review_provenance", "human_review"), ("findings", []), ("findings", {})])
+def test_review_requires_explicit_machine_only_schema(bundle, snapshot, field, value):
+    _, review_path, review, _ = reviewed_url_fixture(bundle, snapshot)
+    review[field] = value
+    snapshot["write"](review_path, review)
+    with pytest.raises(ValueError, match="certificate"):
+        bundle.inventory(**snapshot["args"])
+
+
+def test_duplicate_review_finding_refused(bundle, snapshot):
+    _, review_path, review, row = reviewed_url_fixture(bundle, snapshot)
+    review["findings"].append(dict(row))
+    snapshot["write"](review_path, review)
+    with pytest.raises(ValueError, match="Duplicate"):
+        bundle.inventory(**snapshot["args"])
+
+
+def test_review_certificate_outside_exact_private_review_directory_refused(bundle, snapshot):
+    _, _, review, _ = reviewed_url_fixture(bundle, snapshot)
+    snapshot["args"]["benign_url_pattern_review"] = snapshot["write"](snapshot["canonical"] / "data/raw/review.json", review)
+    with pytest.raises(ValueError, match="certificate path"):
+        bundle.inventory(**snapshot["args"])
+
+
+def test_review_is_not_a_global_url_or_embedded_token_exemption(bundle, snapshot):
+    reviewed_url_fixture(bundle, snapshot)
+    secret = b"sk-" + b"z" * 32
+    snapshot["write"](snapshot["model"].parent / "unsafe.txt", b"x" * 262140 + secret)
+    manifest = bundle.inventory(**snapshot["args"])
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/unreviewed.zip"
+    with pytest.raises(ValueError, match="credential") as failure:
+        bundle.package(manifest, snapshot["canonical"], output)
+    assert secret.decode() not in str(failure.value) and not output.exists()
+
+
+def test_second_unreviewed_match_in_same_certified_source_is_refused(bundle, snapshot):
+    reviewed_url_fixture(bundle, snapshot, suffix=b' <a href="https://example.invalid/?key=sk-' + b"z" * 32 + b'">bad</a>')
+    manifest = bundle.inventory(**snapshot["args"])
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/extra.zip"
+    with pytest.raises(ValueError, match="credential"):
+        bundle.package(manifest, snapshot["canonical"], output)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("remaining", [30, 80])
+def test_review_absolute_offsets_and_carry_overlap_are_exact(bundle, snapshot, remaining):
+    heading = b'<a href="https://example.invalid/ri'
+    prefix = b"x" * (262144 - remaining - len(heading))
+    _, _, _, row = reviewed_url_fixture(bundle, snapshot, prefix=prefix, suffix=b" " * 1000)
+    assert row["byte_offset"] == 262144 - remaining
+    manifest = bundle.inventory(**snapshot["args"])
+    output = snapshot["canonical"] / f"data/machine_runs/private_reproducibility/carry-{remaining}.zip"
+    bundle.package(manifest, snapshot["canonical"], output)
+    assert output.exists()
+
+
+def test_truncated_review_does_not_authorize_longer_regex_match(bundle, snapshot):
+    raw, review_path, review, row = reviewed_url_fixture(bundle, snapshot)
+    row["match_length"] -= 5
+    partial = raw.read_bytes()[row["byte_offset"]:row["byte_offset"] + row["match_length"]]
+    row["match_sha256"] = hashlib.sha256(partial).hexdigest()
+    snapshot["write"](review_path, review)
+    manifest = bundle.inventory(**snapshot["args"])
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/truncated.zip"
+    with pytest.raises(ValueError, match="credential"):
+        bundle.package(manifest, snapshot["canonical"], output)
+    assert not output.exists()
+
+
+def test_mutated_review_certificate_is_refused_before_package(bundle, snapshot):
+    _, review_path, _, _ = reviewed_url_fixture(bundle, snapshot)
+    manifest = bundle.inventory(**snapshot["args"])
+    review_path.write_bytes(review_path.read_bytes() + b"\n")
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/changed-review.zip"
+    with pytest.raises(ValueError, match="Inventory"):
+        bundle.package(manifest, snapshot["canonical"], output)
+    assert not output.exists()
+
+
+def test_unused_review_finding_cannot_reach_final_publication(bundle, snapshot, monkeypatch):
+    reviewed_url_fixture(bundle, snapshot)
+    manifest = bundle.inventory(**snapshot["args"])
+    original = bundle.SECRETS
+
+    class NoObservedMatches:
+        fullmatch = original.fullmatch
+        search = original.search
+
+        @staticmethod
+        def finditer(_):
+            return iter(())
+
+    monkeypatch.setattr(bundle, "SECRETS", NoObservedMatches())
+    output = snapshot["canonical"] / "data/machine_runs/private_reproducibility/unused.zip"
+    with pytest.raises(ValueError, match="Unused"):
+        bundle.package(manifest, snapshot["canonical"], output)
+    assert not output.exists()

@@ -280,7 +280,7 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   table(slide, [['Observed result', 'One actual Codex query'], ['Retrieved evidence', String(ui.evidence)],
     ['Answer claims', String(ui.claims)], ['Exact quotations', String(ui.quotes)],
     ['End-to-end elapsed time', `${ui.total_seconds.toFixed(3)} seconds`]], 299, 270, [620, 516], 28);
-  text(slide, 'No API-key input. AppTest confirms execution. Live browser HTTP behavior remains unverified.',
+  text(slide, 'No API-key input. AppTest confirms execution, not full browser interaction.',
     72, 599, 1136, 62, 25, false, color.muted);
 }
 // 10. Complete formal answer metrics when present, otherwise the original pilot.
@@ -288,20 +288,24 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   const slide = page(formalAnswers ? 'Answers on 100 TEST questions' : 'A and B: Five-case diagnostic pilot',
     sourceNote('formal_answer_result', 'answer_sample_plan', 'formal_manifest', 'ablation_result'));
   if (formalAnswers) {
-    table(slide, [['Variant', 'Machine\ncorrectness', 'Claim\nsupport', 'Citation\nsupport', 'Future\nhits'],
+    table(slide, [['Variant', 'Ordinal mean\n(score / 2)', 'Claim\nsupport', 'Citation\nsupport', 'Future\nhits'],
       ...FORMAL_ANSWER_VARIANTS.map((key, index) => {
         const result = formalAnswers.summary[key];
-        return [FORMAL_ANSWER_NAMES[index], pct(result.automatic_correctness),
+        return [FORMAL_ANSWER_NAMES[index], result.automatic_correctness.toFixed(3),
           pct(result.automatic_claim_faithfulness), pct(result.automatic_citation_support_rate),
           String(result.future_evidence_count)];
       })], 176, 399, [270, 246, 250, 250, 120], 24);
-    text(slide, '100 questions per variant. Claim and citation denominators vary.', 72, 587, 1136, 36, 26);
-    text(slide, 'Machine references and judges can share errors. Human calibration remains unmeasured.',
+    text(slide, 'B changes 0/100 answers, with or without A. No observed B benefit.', 72, 587, 1136, 36, 26);
+    text(slide, '100 questions per variant; support denominators vary. Not human accuracy.',
       72, 628, 1136, 37, 24, false, color.muted);
     slide.speakerNotes.text += '\nCorrectness averages the automatic ordinal score divided by two. '
       + 'Claim support and citation support pool emitted claims and claim-citation pairs, respectively. '
-      + 'Their denominators differ across variants because B may remove claims. Undefined metrics remain undefined. '
+      + 'Their denominators differ across retrieval variants; B removes zero claims in this experiment. Undefined metrics remain undefined. '
       + 'Future hits count retrieved evidence, not erroneous answer claims. All variants share the pre-label TEST sample. '
+      + 'Base/B and A/AB answers and evidence are each identical on all 100 questions. '
+      + 'The 0.005 base/B correctness difference and 0.005 A/AB relevance difference are independent judge variability, not changed answers. '
+      + 'A minus base paired correctness mean is 0.020, unadjusted percentile 95% bootstrap interval [0.005, 0.040], '
+      + '100 queries, 2000 resamples, seed 6127. Machine references and judges can share source errors; human calibration is unmeasured. '
       + FORMAL_ANSWER_VARIANTS.map(key => {
         const row = formalAnswers.summary[key];
         return `${key}: claim judgments=${row.automatic_claim_faithfulness_denominator}, `
@@ -334,13 +338,28 @@ function paragraphs(slide, items, top = 184, fontSize = 30) {
   table(slide, [['Case', 'Observed issue or tested risk', 'Current response'],
     ['Future evidence', futureCount === undefined ? 'Future-source leakage control'
       : `${futureCount} future hits in the ${formalAnswers ? 'formal base' : 'base pilot'}`, 'A filters availability'],
-    ['Policy effects', 'A notice alone cannot establish physical supply effects', 'Declare insufficient evidence'],
-    ['Statistical units', 'Crude oil and total liquids cover different products', 'Keep product scope and units'],
-    ['Latest forecast', 'The UI query retrieved 2018 and 2019 outlooks', 'Latest-report relevance remains unresolved']],
+    ...(formalAnswers ? [
+      ['Enumeration', 'All six answers flatten a source list; B retains it', 'Source and reference can disagree'],
+      ['Cutoff-day update', 'Top five miss seven observed vs nine forecast starts', 'A still misses this update'],
+      ['Dated original', 'Dense finds later republication, misses eligible original', 'Top-five absence is not absence']
+    ] : [
+      ['Policy effects', 'A notice alone cannot establish physical supply effects', 'Declare insufficient evidence'],
+      ['Statistical units', 'Crude oil and total liquids cover different products', 'Keep product scope and units'],
+      ['Latest forecast', 'The UI query retrieved 2018 and 2019 outlooks', 'Latest-report relevance remains unresolved']]),
+    ],
     176, 438, [240, 540, 356], 25);
   text(slide, formalAnswers ? 'Automatic judges assess semantic support. Human calibration remains unmeasured.'
     : 'Exact quotes and dates verify format. Semantic support still needs evaluation.',
     72, 624, 1136, 40, 24, false, color.muted);
+  if (formalAnswers) slide.speakerNotes.text += '\nActual formal examples, not new human labels: '
+    + 'test-e06e3f3ad4926ea21b67: source enumerates HGLs (such as propane), distillate fuel and motor gasoline; '
+    + 'all variants and the machine reference flatten that category boundary. Source: https://www.eia.gov/todayinenergy/detail.php?id=35352. '
+    + 'test-39e8b02405743a13a4d9: eligible 2020-03-02 evidence has seven observed 2019 starts and nine forecast 2020 starts; '
+    + 'top-five results miss it, including A/AB. Source: https://www.eia.gov/todayinenergy/detail.php?id=43015. '
+    + 'test-d66b6c3d85efab2888d8: dense misses the April original while finding a December republication. '
+    + 'Eligible originals: https://www.eia.gov/todayinenergy/detail.php?id=43455 and '
+    + 'https://www.eia.gov/todayinenergy/detail.php?id=43375. Product supplied is a proxy, not instant end-use consumption. '
+    + 'Frozen references and scores remain unchanged. These report-only source comparisons do not establish human accuracy.';
 }
 // 12. Honest final coverage statement.
 {

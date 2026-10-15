@@ -77,7 +77,8 @@ def safe_file(path, roots):
     raise ValueError("Input file escapes the exact project roots")
 
 
-def inventory(canonical_root, formal_run, audit_path, audit_sha256, runtime_dir, publication_root=None):
+def inventory(canonical_root, formal_run, audit_path, audit_sha256, runtime_dir, publication_root=None,
+              benign_url_pattern_review=None):
     canonical = resolved_path(canonical_root)
     publication = resolved_path(publication_root or Path(__file__).parents[1])
     roots = {"canonical": canonical, "publication": publication}
@@ -175,10 +176,51 @@ def inventory(canonical_root, formal_run, audit_path, audit_sha256, runtime_dir,
         require(re.fullmatch("[a-f0-9]{64}", expected_hash) and sha(path) == expected_hash, "Input SHA256 differs")
         entries[name] = {"original_absolute_path": record["aliases"][0], "original_path_aliases": sorted(record["aliases"]),
                          "sha256": expected_hash, "bytes": io_path(path).stat().st_size}
+    reviewed = None
+    if benign_url_pattern_review is not None:
+        review_path = resolved_path(benign_url_pattern_review)
+        review_name = safe_file(review_path, roots)
+        require(review_path.parent == canonical / "data/machine_runs/private_reproducibility_review"
+                and review_path.suffix == ".json", "Unexpected benign review certificate path")
+        certificate = read(review_path)
+        require(isinstance(certificate, dict) and set(certificate) == {"schema_version", "classification", "review_provenance", "findings"}
+                and type(certificate["schema_version"]) is int and certificate["schema_version"] == 1
+                and certificate["classification"] == "embedded_public_article_url_slug"
+                and certificate["review_provenance"] == "codex_syntax_review_not_human"
+                and isinstance(certificate["findings"], list) and certificate["findings"], "Invalid benign review certificate")
+        rows, spans = [], set()
+        for row in certificate["findings"]:
+            require(isinstance(row, dict) and set(row) == {"archive_path", "file_sha256", "byte_offset", "match_length", "match_sha256"},
+                    "Invalid benign finding fields")
+            name = row["archive_path"]
+            require(isinstance(name, str) and re.fullmatch(r"canonical/data/raw/[A-Za-z0-9_.-]+\.(?:html?|pdf)", name)
+                    and name in entries, "Benign review may only bind an archived original raw HTML/PDF")
+            require(all(isinstance(row[k], str) and re.fullmatch("[a-f0-9]{64}", row[k]) for k in ("file_sha256", "match_sha256"))
+                    and row["file_sha256"] == entries[name]["sha256"], "Benign review full-file SHA256 differs")
+            require(type(row["byte_offset"]) is int and row["byte_offset"] >= 0
+                    and type(row["match_length"]) is int and 1 <= row["match_length"] <= 128
+                    and row["byte_offset"] + row["match_length"] <= entries[name]["bytes"], "Invalid benign finding span")
+            span = (name, row["byte_offset"], row["match_length"])
+            require(span not in spans and not any(n == name and row["byte_offset"] < start + length
+                    and start < row["byte_offset"] + row["match_length"] for n, start, length in spans), "Duplicate or overlapping benign finding")
+            spans.add(span)
+            with io_path(entries[name]["original_absolute_path"]).open("rb") as source:
+                source.seek(row["byte_offset"])
+                matched = source.read(row["match_length"])
+            require(SECRETS.fullmatch(matched) and hashlib.sha256(matched).hexdigest() == row["match_sha256"], "Benign finding bytes differ")
+            rows.append(dict(row))
+        digest = sha(review_path)
+        entries[review_name] = {"original_absolute_path": str(review_path), "original_path_aliases": [str(review_path)],
+                               "sha256": digest, "bytes": io_path(review_path).stat().st_size}
+        reviewed = dict(review_file=review_name, review_file_sha256=digest,
+                        classification=certificate["classification"], review_provenance=certificate["review_provenance"],
+                        reviewed_benign_findings=sorted(rows, key=lambda row: (row["archive_path"], row["byte_offset"])))
     manifest = dict(schema_version=1, scope="local_private_only_not_redistribution_clearance",
         input_binding=dict(canonical_root=str(canonical), formal_run=str(run), audit_path=str(audit_path),
-            audit_sha256=audit_sha256, runtime_dir=str(runtime), publication_root=str(publication)),
+            audit_sha256=audit_sha256, runtime_dir=str(runtime), publication_root=str(publication),
+            benign_url_pattern_review=str(review_path) if reviewed is not None else None),
         completed_machine_answers=600, audit_sha256=audit_sha256, entries=entries, raw_registry=registry,
+        credential_pattern_review=reviewed,
         raw_document_count=len(registry), source_license_counts=dict(Counter(str(r["redistribution"]) for r in registry)),
         rights_review_required=True, cloud_sharing_authorized=False, frozen_files_rewritten=False,
         model_license_file_present=any(p.is_file() and p.name.lower().startswith("license") for p in io_path(canonical / "models").rglob("*")),
@@ -199,19 +241,37 @@ def package(manifest, canonical_root, output):
     partial = output.with_suffix(".zip.incomplete")
     require(not io_path(partial).exists(), "Never overwrite an incomplete attempt")
     io_path(output.parent).mkdir(parents=True, exist_ok=True)
+    approved = {}
+    for row in (manifest["credential_pattern_review"] or {}).get("reviewed_benign_findings", []):
+        key = (row["archive_path"], row["file_sha256"], row["byte_offset"], row["match_length"], row["match_sha256"])
+        approved[key] = row
+    observed = set()
     with zipfile.ZipFile(io_path(partial), "x", zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for name, entry in sorted(manifest["entries"].items()):
             require(not Path(name).is_absolute() and ".." not in Path(name).parts, "Unsafe archive entry")
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type, info.external_attr = zipfile.ZIP_DEFLATED, 0o100644 << 16
-            checksum, carry = hashlib.sha256(), b""
+            checksum, carry, consumed = hashlib.sha256(), b"", 0
             with io_path(entry["original_absolute_path"]).open("rb") as source, archive.open(info, "w", force_zip64=True) as target:
                 for block in iter(lambda: source.read(262144), b""):
-                    require(not SECRETS.search(carry + block), "Potential credential bytes refused")
+                    window = carry + block
+                    for match in SECRETS.finditer(window):
+                        start = consumed - len(carry) + match.start()
+                        key = (name, entry["sha256"], start, len(match.group()), hashlib.sha256(match.group()).hexdigest())
+                        # A certified match may straddle blocks; only its exact, hash-bound span can be deferred.
+                        if key not in approved and match.end() == len(window) and any(
+                                row["archive_path"] == name and row["file_sha256"] == entry["sha256"]
+                                and row["byte_offset"] == start and len(match.group()) < row["match_length"]
+                                for row in approved.values()):
+                            continue
+                        require(key in approved, "Potential credential bytes refused")
+                        observed.add(key)
                     carry = block[-128:]
+                    consumed += len(block)
                     checksum.update(block)
                     target.write(block)
             require(checksum.hexdigest() == entry["sha256"], "Input changed during packaging")
+        require(observed == set(approved), "Unused or incomplete benign review findings refused")
         raw = json.dumps(manifest, sort_keys=True, indent=2, allow_nan=False).encode()
         require(not SECRETS.search(raw), "Potential credential in manifest")
         info = zipfile.ZipInfo("MANIFEST.json", date_time=(1980, 1, 1, 0, 0, 0))
@@ -228,6 +288,9 @@ if __name__ == "__main__":
     for name in ("canonical-root", "formal-run", "audit", "runtime-dir", "output-new"):
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--audit-sha256", required=True)
+    parser.add_argument("--benign-url-pattern-review", type=Path,
+                        help="Exact hash/span-bound, machine syntax review certificate; never a global pattern exemption")
     args = parser.parse_args()
-    manifest = inventory(args.canonical_root, args.formal_run, args.audit, args.audit_sha256, args.runtime_dir)
+    manifest = inventory(args.canonical_root, args.formal_run, args.audit, args.audit_sha256, args.runtime_dir,
+                         benign_url_pattern_review=args.benign_url_pattern_review)
     print(json.dumps(package(manifest, args.canonical_root, args.output_new), indent=2))

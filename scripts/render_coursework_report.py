@@ -146,6 +146,8 @@ def render(source, output, receipt=None):
                 weights[index] = max(weights[index], 16)
             if name == "Questions":
                 weights[index] = max(weights[index], 16)
+            if re.fullmatch(r"(?:Precision|MRR|nDCG)@\d+", name):
+                weights[index] = max(weights[index], 14)
         widths = [WIDTH * weight / sum(weights) for weight in weights]
         content = [[Paragraph(inline(cell), table_body) for cell in row] for row in table_rows]
         table = Table(content, colWidths=widths, repeatRows=1, hAlign="LEFT")
